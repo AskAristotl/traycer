@@ -15,10 +15,10 @@ import { Route as EpicsRouteImport } from "./routes/epics";
 import { Route as IndexRouteImport } from "./routes/index";
 import { Route as SettingsIndexRouteImport } from "./routes/settings.index";
 import { Route as EpicsIndexRouteImport } from "./routes/epics/index";
-import { Route as SettingsRemoteHostsRouteImport } from "./routes/settings.remote-hosts";
 import { Route as SettingsWorktreesRouteImport } from "./routes/settings.worktrees";
 import { Route as SettingsShellRouteImport } from "./routes/settings.shell";
 import { Route as SettingsServiceRouteImport } from "./routes/settings.service";
+import { Route as SettingsRemoteHostsRouteImport } from "./routes/settings.remote-hosts";
 import { Route as SettingsProvidersRouteImport } from "./routes/settings.providers";
 import { Route as SettingsKeybindingsRouteImport } from "./routes/settings.keybindings";
 import { Route as SettingsHostRouteImport } from "./routes/settings.host";
@@ -59,11 +59,6 @@ const EpicsIndexRoute = EpicsIndexRouteImport.update({
   path: "/",
   getParentRoute: () => EpicsRoute,
 } as any);
-const SettingsRemoteHostsRoute = SettingsRemoteHostsRouteImport.update({
-  id: "/remote-hosts",
-  path: "/remote-hosts",
-  getParentRoute: () => SettingsRoute,
-} as any);
 const SettingsWorktreesRoute = SettingsWorktreesRouteImport.update({
   id: "/worktrees",
   path: "/worktrees",
@@ -77,6 +72,11 @@ const SettingsShellRoute = SettingsShellRouteImport.update({
 const SettingsServiceRoute = SettingsServiceRouteImport.update({
   id: "/service",
   path: "/service",
+  getParentRoute: () => SettingsRoute,
+} as any);
+const SettingsRemoteHostsRoute = SettingsRemoteHostsRouteImport.update({
+  id: "/remote-hosts",
+  path: "/remote-hosts",
   getParentRoute: () => SettingsRoute,
 } as any);
 const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
@@ -325,18 +325,18 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof SettingsServiceRouteImport;
       parentRoute: typeof SettingsRoute;
     };
-    "/settings/providers": {
-      id: "/settings/providers";
-      path: "/providers";
-      fullPath: "/settings/providers";
-      preLoaderRoute: typeof SettingsProvidersRouteImport;
-      parentRoute: typeof SettingsRoute;
-    };
     "/settings/remote-hosts": {
       id: "/settings/remote-hosts";
       path: "/remote-hosts";
       fullPath: "/settings/remote-hosts";
       preLoaderRoute: typeof SettingsRemoteHostsRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
+    "/settings/providers": {
+      id: "/settings/providers";
+      path: "/providers";
+      fullPath: "/settings/providers";
+      preLoaderRoute: typeof SettingsProvidersRouteImport;
       parentRoute: typeof SettingsRoute;
     };
     "/settings/keybindings": {

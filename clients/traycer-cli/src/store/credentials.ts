@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { chmod, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { config } from "../config";
+import { credentialEnvironment } from "../runner/environment";
 import { cliCredentialsPath, ensureCliHomeDir } from "./paths";
+
+// Credentials live at the scope of the backend the token authenticates against,
+// which for the dev slot is production (dev-desktop runs against the prod cloud
+// + a downloaded prod host that reads the shared-root file). See
+// `credentialEnvironment`. Resolved once: `config.environment` is baked per
+// build and never changes at runtime.
+const CREDENTIALS_ENVIRONMENT = credentialEnvironment(config.environment);
 
 // ~/.traycer/cli/credentials shape. Stored as JSON with mode 0600 so other
 // users on shared machines can't read the bearer token. The `user` block is
@@ -25,7 +33,7 @@ export interface StoredCredentials {
 export async function readCredentials(): Promise<StoredCredentials | null> {
   let raw: string;
   try {
-    raw = await readFile(cliCredentialsPath(config.environment), "utf8");
+    raw = await readFile(cliCredentialsPath(CREDENTIALS_ENVIRONMENT), "utf8");
   } catch {
     return null;
   }
@@ -66,8 +74,8 @@ export async function readCredentials(): Promise<StoredCredentials | null> {
 }
 
 export async function writeCredentials(creds: StoredCredentials): Promise<void> {
-  await ensureCliHomeDir(config.environment);
-  const target = cliCredentialsPath(config.environment);
+  await ensureCliHomeDir(CREDENTIALS_ENVIRONMENT);
+  const target = cliCredentialsPath(CREDENTIALS_ENVIRONMENT);
   // Unique temp name per write: the Desktop re-seeds via a spawned
   // `traycer login --token -` while sibling CLI processes self-refresh, so a
   // shared `${target}.tmp` would let concurrent writers clobber each other's
@@ -87,7 +95,7 @@ export async function writeCredentials(creds: StoredCredentials): Promise<void> 
 
 export async function deleteCredentials(): Promise<boolean> {
   try {
-    await unlink(cliCredentialsPath(config.environment));
+    await unlink(cliCredentialsPath(CREDENTIALS_ENVIRONMENT));
     return true;
   } catch {
     return false;
