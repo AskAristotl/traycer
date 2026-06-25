@@ -37,14 +37,16 @@ interface. A host-side forwarder is therefore **required**, not optional.
   + version badge.
 - A **GUI chat** tab works against the remote host (agent runs).
 - A **terminal** tab works against the remote host (PTY).
-- A **Settings → Remote Hosts** panel: add by tailnet name, remove, see status.
-- Manually-added hosts use the host's **real `hostId`** (see Key Decisions).
+- **Auto-discovery:** Traycer hosts on the tailnet are enumerated automatically
+  (`tailscale status --json` + a `/whoami` probe) and appear in the picker with
+  no manual entry.
+- A **Settings → Remote Hosts** panel: see discovered hosts + status, toggle
+  which to use, and manually add (fallback) or remove a host.
+- Hosts use the host's **real `hostId`** (from `/whoami`; see Key Decisions).
 
 ## Non-goals (v1)
 
 - No relay/tunnel server (Tailscale is the transport).
-- No automatic tailnet enumeration (hosts are added manually; auto-discovery is
-  a possible later enhancement).
 - No cross-account authorization work. Multi-person use is served by a **shared
   single account** (see "Accounts & authorization"); separate-account access is
   gated server-side and cannot be enabled from this fork.
@@ -123,7 +125,7 @@ Options, in order of certainty:
 Client machine (you)                          Host machine (on tailnet)
 ┌────────────────────────────┐                ┌─────────────────────────────────────┐
 │ Settings → Remote Hosts     │  https (cert)  │ Traycer Tailnet Bridge (NEW)        │
-│   add by tailnet name       │ ──/whoami────► │  • reads ~/.traycer/host/pid.json    │
+│   discovered + add (manual) │ ──/whoami────► │  • reads ~/.traycer/host/pid.json    │
 │   ● online / version badge  │ ──/healthz───► │  • drives `tailscale serve` config   │
 │                            │                │  • reconfigures on host respawn      │
 │ remoteFetcher (real, NEW)   │   wss (cert)   │ ┌─────────────────────────────────┐ │
@@ -153,17 +155,27 @@ Client machine (you)                          Host machine (on tailnet)
 ### 2. Remote-host config store — renderer
 - **Location:** `clients/gui-app/src/stores/remote-hosts/`.
 - Persisted Zustand store (`basePersistOptions` + new `STORE_KEYS` entry) holding
-  `{ tailnetName, label, hostId, addedAt }[]`. Pure state, no I/O.
+  manually-added hosts `{ tailnetName, label, hostId, addedAt }[]` plus a
+  per-`hostId` enable/disable map for discovered hosts (so a user can hide one).
+  Pure state, no I/O.
 
-### 3. Electron-main remote probe + IPC — new
+### 3. Electron-main Tailscale probe + enumeration + IPC — new
 - **Location:** `clients/desktop/src/electron-main/host/remote-probe.ts`.
 - `probeRemoteHost(tailnetName) → { reachable, hostId, version }` via Node
-  `https GET /whoami|/healthz`. Exposed over the existing `runner-ipc.ts` bridge.
+  `https GET /whoami|/healthz`.
+- `enumerateTailnetHosts() → { tailnetName, hostId, version }[]`: run
+  `tailscale status --json`, take each online peer's `DNSName`, probe its
+  `/whoami`, and keep the ones that answer (a running Traycer bridge). Peers that
+  don't answer are silently skipped.
+- Both exposed over the existing `runner-ipc.ts` bridge.
 
 ### 4. Real `remoteFetcher` — renderer
 - **Location:** `clients/gui-app/src/lib/host/tailnet-remote-fetcher.ts`.
-- Reads unit 2, calls unit 3 per host, returns `HostDirectoryEntry[]`
-  (`kind:"remote"`, `websocketUrl:"wss://<name>/rpc"`, `status`, `version`).
+- Composes **enumerated** hosts (unit 3 `enumerateTailnetHosts`) with
+  **manually-added** hosts (unit 2), de-dupes by `hostId` (a discovered host also
+  added manually appears once), drops user-disabled discovered hosts, and returns
+  `HostDirectoryEntry[]` (`kind:"remote"`, `websocketUrl:"wss://<name>/rpc"`,
+  `status`, `version`).
 - **Wire-in:** replace the `null`/stub `remoteFetcher` at the desktop mount that
   feeds `host-runtime-provider.tsx:168`. Downstream (picker, binding, transport)
   is unchanged.
@@ -171,22 +183,25 @@ Client machine (you)                          Host machine (on tailnet)
 ### 5. Settings → Remote Hosts panel — renderer
 - **Location:**
   `clients/gui-app/src/components/settings/panels/remote-hosts-settings-panel.tsx`.
-- Add-by-tailnet-name (probes `/whoami` to capture canonical `hostId`), remove,
-  and online/offline + version badges (periodic `/healthz`). Registered in the
-  settings nav beside Providers/Host; mirrors `providers-settings-panel.tsx`.
+- Lists **discovered** hosts (from unit 3) with online/offline + version badges
+  and an enable/disable toggle; plus a **manual add** fallback (enter a tailnet
+  name, probe `/whoami` to capture the canonical `hostId`) and remove. Registered
+  in the settings nav beside Providers/Host; mirrors `providers-settings-panel.tsx`.
 
 ## Data flow
 
-1. **Add host:** user enters tailnet name → main probes `/whoami` → real
-   `hostId` + version captured → saved to store.
-2. **Refresh:** on start / periodically, `remoteFetcher` reads the store →
-   main probes `/healthz` + `/whoami` per host → returns entries with `status`.
-3. **Merge:** `HostDirectoryService` merges local + remote → picker shows the
+1. **Discover:** on start / periodically, main runs `tailscale status --json`,
+   probes each online peer's `/whoami`, and returns the running Traycer hosts.
+2. **Manual add (fallback):** user enters a tailnet name → main probes `/whoami`
+   → real `hostId` + version captured → saved to store.
+3. **Refresh:** `remoteFetcher` merges discovered + saved (de-duped by `hostId`,
+   user-disabled hosts dropped), re-probes `/healthz` → entries with `status`.
+4. **Merge:** `HostDirectoryService` merges local + remote → picker shows the
    remote host with its badge.
-4. **Connect:** select remote host → existing `bind()` → `WsRpcClient` dials
+5. **Connect:** select remote host → existing `bind()` → `WsRpcClient` dials
    `wss://<name>/rpc` → remote host validates bearer (same account) → chat +
    terminal work.
-5. **Respawn:** host restarts on a new port → bridge reconfigures `tailscale
+6. **Respawn:** host restarts on a new port → bridge reconfigures `tailscale
    serve` → `wss://<name>/rpc` keeps resolving (stable external surface).
 
 ## Error handling
@@ -219,15 +234,21 @@ Client machine (you)                          Host machine (on tailnet)
   units on it.
 - Tailscale HTTPS cert provisioning latency on first `serve` — acceptable;
   one-time per host.
+- `tailscale status --json` output shape: read only the stable `Peer[].DNSName`
+  / `Peer[].Online` fields and guard parsing; unreadable output degrades to
+  "no discovered hosts" (manual add still works).
 
 ## Testing strategy
 
 - **Bridge runtime:** unit test with a fake `tailscale` exec + temp `pid.json`
   (assert serve args; reconfigure on pid change).
-- **`remoteFetcher`:** unit test composing store + mocked probe → asserts entry
-  shape/status (extends existing `host-directory-service.test.ts`).
-- **Settings panel + main probe:** component/unit tests mirroring
-  `providers-settings-panel.test.tsx`.
+- **`remoteFetcher`:** unit test composing store + mocked probe + mocked
+  enumeration → asserts entry shape/status and discovered-vs-manual de-dupe by
+  `hostId` (extends existing `host-directory-service.test.ts`).
+- **Main probe + enumeration:** unit test with a mocked `tailscale status --json`
+  payload + mock `/whoami` server (assert online peers parsed, non-bridge peers
+  skipped).
+- **Settings panel:** component tests mirroring `providers-settings-panel.test.tsx`.
 - **Acceptance (manual, two machines):** add host → open a GUI chat *and* a
   terminal tab against it.
 
@@ -240,10 +261,13 @@ Client machine (you)                          Host machine (on tailnet)
 4. A terminal tab on B attaches to a working PTY.
 5. Restarting B's host (new port) does not break an existing `wss://B/rpc`
    binding after the bridge reconfigures.
+6. A machine running the bridge appears in another machine's picker **without
+   any manual entry** (auto-discovery); disabling it in Settings hides it.
 
 ## Out of scope / future
 
-- Automatic tailnet enumeration (`tailscale status --json`).
-- Cross-account host sharing + per-host ACL UX.
+- Cross-account host sharing + in-app per-host ACL UX. (Network-level
+  who-reaches-whom is handled by **Tailscale ACLs** — a tailnet config we
+  recommend, not app code.)
 - Remote-aware fixes for OAuth re-auth and "open in editor".
 - Plaintext `--tcp` fallback path (documented but not the v1 default).
