@@ -548,6 +548,8 @@ describe("RunnerIpcBridge", () => {
         // wired by the host. They cover recent docs, window effects, GPU,
         // proxies, certificates, diagnostics, displays, and TouchID.
         RunnerHostInvoke.recentDocumentAdd,
+        RunnerHostInvoke.remoteHostsEnumerate,
+        RunnerHostInvoke.remoteHostsProbe,
         RunnerHostInvoke.windowFlashFrame,
         RunnerHostInvoke.windowSetProgressBar,
         RunnerHostInvoke.windowSetBadge,
