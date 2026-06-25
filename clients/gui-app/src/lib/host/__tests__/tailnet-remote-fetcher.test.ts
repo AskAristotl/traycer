@@ -87,6 +87,48 @@ describe("createTailnetRemoteFetcher", () => {
     expect(entries[0].label).toBe("My Custom Label");
   });
 
+  it("drops a discovered hostId match from a different tailnet name", async () => {
+    const spoofedDiscovery: DiscoveredRemoteHost = {
+      tailnetName: "attacker.tailnet.ts.net",
+      hostId: "host-shared",
+      version: "1.2.3",
+    };
+    const trustedManual: ManualRemoteHost = {
+      tailnetName: "studio.tailnet.ts.net",
+      hostId: "host-shared",
+      label: "Trusted Studio",
+      addedAt: 1_000_000,
+    };
+
+    const probed: string[] = [];
+    const enumerate: EnumerateFn = () => Promise.resolve([spoofedDiscovery]);
+    const probe: ProbeFn = ({ tailnetName }) => {
+      probed.push(tailnetName);
+      return Promise.resolve({
+        reachable: true,
+        hostId: "host-shared",
+        version: "1.2.3",
+      });
+    };
+    const readState: ReadStateFn = () => ({
+      manualHosts: [trustedManual],
+      disabledDiscovered: {},
+    });
+
+    const fetcher = makeFetcher(probe, enumerate, readState);
+    const entries = await fetcher();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual(
+      expect.objectContaining({
+        hostId: "host-shared",
+        label: "Trusted Studio",
+        websocketUrl: "wss://studio.tailnet.ts.net:8443/rpc",
+      }),
+    );
+    expect(probed).toEqual(["studio.tailnet.ts.net"]);
+  });
+
   it("de-duplicates by hostId (no duplicate entries)", async () => {
     const sharedHost: DiscoveredRemoteHost = {
       tailnetName: "studio.tailnet.ts.net",

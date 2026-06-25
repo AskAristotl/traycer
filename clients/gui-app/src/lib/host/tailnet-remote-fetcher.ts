@@ -20,6 +20,16 @@ export interface TailnetRemoteFetcherDeps {
   };
 }
 
+function isSameRemoteHost(
+  discovered: DiscoveredRemoteHost,
+  manual: ManualRemoteHost,
+): boolean {
+  return (
+    discovered.hostId === manual.hostId &&
+    discovered.tailnetName === manual.tailnetName
+  );
+}
+
 /**
  * Compose a `RemoteHostFetcher` from the preload bridge's `remoteHosts` surface
  * and the gui-app persisted remote-hosts store.
@@ -27,9 +37,11 @@ export interface TailnetRemoteFetcherDeps {
  * Merge rules (applied in order):
  * 1. Enumerate discovered tailnet hosts via `enumerate()`.
  * 2. Drop any discovered host whose hostId is in `disabledDiscovered`.
- * 3. Merge with `manualHosts`; when a manual host shares a hostId with a
- *    discovered host the manual label wins (de-duplicated by hostId).
- * 4. Probe each manual host that was NOT already discovered to determine
+ * 3. Drop discovered hosts that claim a trusted manual hostId from a different
+ *    tailnetName.
+ * 4. Merge with `manualHosts`; when a manual host shares both hostId and
+ *    tailnetName with a discovered host the manual label wins.
+ * 5. Probe each manual host that was NOT already discovered to determine
  *    reachability / availability.
  *
  * The fetcher never throws — any error returns [].
@@ -50,19 +62,21 @@ export function createTailnetRemoteFetcher(
         discovered = [];
       }
 
-      // 2. Drop disabled discovered hosts
+      // 2. Drop disabled discovered hosts and discovered identity conflicts.
       const enabledDiscovered = discovered.filter(
-        (d) => !disabledDiscovered[d.hostId],
+        (d) =>
+          !disabledDiscovered[d.hostId] &&
+          !manualHosts.some(
+            (m) => m.hostId === d.hostId && !isSameRemoteHost(d, m),
+          ),
       );
-
-      // Build a Set of discovered hostIds so we can skip re-probing them
-      const discoveredIds = new Set(enabledDiscovered.map((d) => d.hostId));
 
       // 3. Build entries for enabled discovered hosts
       const discoveredEntries: HostDirectoryEntry[] = enabledDiscovered.map(
         (d) => {
-          // Check if a manual host overrides the label for this hostId
-          const manualOverride = manualHosts.find((m) => m.hostId === d.hostId);
+          const manualOverride = manualHosts.find((m) =>
+            isSameRemoteHost(d, m),
+          );
           return toRemoteDirectoryEntry({
             tailnetName: d.tailnetName,
             hostId: d.hostId,
@@ -75,7 +89,7 @@ export function createTailnetRemoteFetcher(
 
       // 4. Probe manual hosts that were NOT in the discovered set
       const manualOnlyHosts = manualHosts.filter(
-        (m) => !discoveredIds.has(m.hostId),
+        (m) => !enabledDiscovered.some((d) => isSameRemoteHost(d, m)),
       );
 
       const manualEntries = await Promise.all(
