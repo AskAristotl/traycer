@@ -4,6 +4,7 @@ import {
   Boxes,
   GitBranch,
   Keyboard,
+  Network,
   Palette,
   Server,
   Settings as SettingsIcon,
@@ -18,6 +19,7 @@ export type SettingsSectionId =
   | "keybindings"
   | "shell"
   | "worktrees"
+  | "remote-hosts"
   | "host";
 
 export interface SettingsSection {
@@ -34,5 +36,6 @@ export const SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
   { id: "keybindings", label: "Keybindings", icon: Keyboard },
   { id: "shell", label: "Shell", icon: TerminalSquare },
   { id: "worktrees", label: "Worktrees", icon: GitBranch },
+  { id: "remote-hosts", label: "Remote Hosts", icon: Network },
   { id: "host", label: "Host", icon: Server },
 ];
