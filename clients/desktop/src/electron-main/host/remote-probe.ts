@@ -7,6 +7,7 @@ import type {
 import { TAILNET_BRIDGE_HTTPS_PORT } from "../../ipc-contracts/remote-host-types";
 
 const PROBE_TIMEOUT_MS = 750;
+const MAX_WHOAMI_BODY_BYTES = 64 * 1024;
 
 interface WhoamiResponse {
   readonly hostId: string;
@@ -44,13 +45,20 @@ function fetchWhoami(tailnetName: string): Promise<WhoamiResponse> {
   return new Promise((resolve, reject) => {
     const url = `https://${tailnetName}:${TAILNET_BRIDGE_HTTPS_PORT}/whoami`;
 
+    let settled = false;
+
     const settle = (value: unknown): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       req.removeAllListeners();
       req.destroy();
       reject(value instanceof Error ? value : new Error(String(value)));
     };
 
     let body = "";
+    let bodyBytes = 0;
 
     const req = https.get(
       url,
@@ -60,9 +68,25 @@ function fetchWhoami(tailnetName: string): Promise<WhoamiResponse> {
       (res) => {
         res.setEncoding("utf8");
         res.on("data", (chunk: string) => {
+          if (settled) {
+            return;
+          }
+          const nextBodyBytes = bodyBytes + Buffer.byteLength(chunk, "utf8");
+          if (nextBodyBytes > MAX_WHOAMI_BODY_BYTES) {
+            settle(
+              new Error(
+                `/whoami response exceeded ${MAX_WHOAMI_BODY_BYTES} bytes`,
+              ),
+            );
+            return;
+          }
+          bodyBytes = nextBodyBytes;
           body += chunk;
         });
         res.on("end", () => {
+          if (settled) {
+            return;
+          }
           let parsed: unknown;
           try {
             parsed = JSON.parse(body);
@@ -82,6 +106,7 @@ function fetchWhoami(tailnetName: string): Promise<WhoamiResponse> {
             return;
           }
           const whoami: WhoamiResponse = { hostId, version };
+          settled = true;
           resolve(whoami);
         });
         res.on("error", (err: Error) => settle(err));
