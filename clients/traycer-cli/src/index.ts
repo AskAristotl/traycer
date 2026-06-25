@@ -49,6 +49,12 @@ import { buildServiceInstallCommand } from "./commands/service-install";
 import { serviceStatusCommand } from "./commands/service-status";
 import { serviceUninstallCommand } from "./commands/service-uninstall";
 import { whoamiCommand } from "./commands/whoami";
+import { runTailnetBridgeServe } from "./commands/tailnet-bridge-serve";
+import {
+  buildBridgeServiceInstallCommand,
+  bridgeServiceUninstallCommand,
+  bridgeServiceStatusCommand,
+} from "./commands/tailnet-bridge-service";
 import { CLI_ERROR_CODES, cliError } from "./runner/errors";
 import {
   addRunnerFlags,
@@ -265,6 +271,7 @@ function registerCommands(program: Command): void {
   registerWorktreeCommands(program);
   registerAgentCommands(program);
   registerMonitorCommand(program);
+  registerTailnetBridgeCommands(program);
 }
 
 function registerAuthCommands(program: Command): void {
@@ -1236,6 +1243,51 @@ function registerMonitorCommand(program: Command): void {
       process.exit(1);
     }
   });
+}
+
+function registerTailnetBridgeCommands(program: Command): void {
+  const bridge = program
+    .command("tailnet-bridge")
+    .description("Expose this machine's Traycer host over the tailnet via tailscale serve");
+
+  addRunnerFlags(
+    bridge
+      .command("serve")
+      .description("Run the bridge in the foreground (used by the OS service)")
+      .option("--https-port <port>", "Tailnet HTTPS port for tailscale serve", "8443")
+      .option("--poll-interval-ms <ms>", "How often to re-check the host port", "1000"),
+  ).action(async (opts: Record<string, unknown>) => {
+    try {
+      await runTailnetBridgeServe({
+        httpsPort:
+          typeof opts.httpsPort === "string" ? Number.parseInt(opts.httpsPort, 10) : 8443,
+        environment: config.environment,
+        pollIntervalMs:
+          typeof opts.pollIntervalMs === "string" ? Number.parseInt(opts.pollIntervalMs, 10) : 1000,
+      });
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(
+        `[traycer tailnet-bridge] fatal: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      process.exit(1);
+    }
+  });
+
+  withRunner(
+    bridge
+      .command("install")
+      .description("Install the tailnet bridge as a per-user OS service")
+      .option("--no-linger", "Do not enable systemd linger (Linux)")
+      .option("--allow-self-invocation", "Allow running the current binary directly"),
+    (opts) =>
+      buildBridgeServiceInstallCommand({
+        enableLinger: opts.linger !== false,
+        allowSelfInvocation: opts.allowSelfInvocation === true,
+      }),
+  );
+  withRunner(bridge.command("uninstall").description("Remove the tailnet bridge service"), () => bridgeServiceUninstallCommand);
+  withRunner(bridge.command("status").description("Show tailnet bridge service status"), () => bridgeServiceStatusCommand);
 }
 
 // Script entry. Skipped when this module is imported (e.g. by the
