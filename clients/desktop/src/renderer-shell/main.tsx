@@ -1,6 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { TraycerApp, hostRpcRegistry } from "@traycer-clients/gui-app";
+import {
+  TraycerApp,
+  hostRpcRegistry,
+  createTailnetRemoteFetcher,
+  useRemoteHostsStore,
+} from "@traycer-clients/gui-app";
 import * as Sentry from "@sentry/electron/renderer";
 import { makeFetchTransport } from "@sentry/browser";
 import "./index.css";
@@ -52,6 +57,16 @@ function bootstrap(): void {
     signInUrl: composeDesktopSignInUrl(redirectUri),
   });
 
+  // Built once before render — referentially stable across re-renders.
+  const remoteFetcher = createTailnetRemoteFetcher({
+    probe: (input) => bridge.remoteHosts.probe(input),
+    enumerate: () => bridge.remoteHosts.enumerate(),
+    readState: () => {
+      const s = useRemoteHostsStore.getState();
+      return { manualHosts: s.manualHosts, disabledDiscovered: s.disabledDiscovered };
+    },
+  });
+
   const container = document.getElementById("root");
   if (container === null) {
     throw new Error("#root element not found in index.html");
@@ -62,7 +77,7 @@ function bootstrap(): void {
       <TraycerApp
         runnerHost={host}
         registry={hostRpcRegistry}
-        remoteFetcher={null}
+        remoteFetcher={remoteFetcher}
         initialRoute={bridge.initialRoute}
       />
     </StrictMode>,
