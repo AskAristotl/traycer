@@ -445,6 +445,10 @@ function buildFakeBridge(
     hostTray: {
       onCommand: () => ({ dispose: () => undefined }),
     },
+    remoteHosts: {
+      probe: async () => ({ reachable: false, hostId: null, version: null }),
+      enumerate: async () => [],
+    },
   };
 
   return {
