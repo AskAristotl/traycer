@@ -67,6 +67,8 @@ describe("persist key builders — output-preserving against current source", ()
     expect(persistKey("workspace-folders")).toBe(
       "traycer-gui-app:workspace-folders",
     );
+    // Source: src/stores/remote-hosts/remote-hosts-store.ts
+    expect(persistKey("remote-hosts")).toBe("traycer-gui-app:remote-hosts");
   });
 
   it("emits the current localStorage key for each of the 5 scoped stores", () => {
