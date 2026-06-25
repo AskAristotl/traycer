@@ -15,7 +15,10 @@ describe("parseHostWsPort", () => {
 });
 
 describe("readBridgeHostEndpoint", () => {
-  let readHostPidMetadataSpy;
+  let readHostPidMetadataSpy: {
+    mockRestore(): void;
+    mockResolvedValue(value: { pid: number; hostId: string; version: string; websocketUrl: string; startedAt: string } | null): void;
+  };
 
   beforeEach(() => {
     readHostPidMetadataSpy = vi.spyOn(
