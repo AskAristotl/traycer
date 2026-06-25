@@ -1,6 +1,5 @@
 import type { Environment } from "../runner/environment";
 import { startBridgeHttpServer } from "./bridge-http-server";
-import { readBridgeHostEndpoint, type BridgeHostEndpoint } from "./host-endpoint";
 import { applyServeConfig, resetServeConfig, type ServeRunner } from "./serve-config";
 
 export interface RunTailnetBridgeOptions {
@@ -11,27 +10,27 @@ export interface RunTailnetBridgeOptions {
   readonly signal: AbortSignal;
 }
 
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
+function waitForAbort(signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => {
-    const onAbort = (): void => {
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
     if (signal.aborted) {
-      clearTimeout(timer);
       resolve();
       return;
     }
-    signal.addEventListener("abort", onAbort, { once: true });
+    signal.addEventListener("abort", () => resolve(), { once: true });
   });
 }
 
+// Design B (see plans/2026-06-25-tailscale-remote-hosts.md): the bridge HTTP
+// server is the single `tailscale serve` backend for every path. `/rpc` +
+// `/stream` are re-originated to the host over loopback by the HTTP server
+// itself (which rewrites `Host`/`Origin` so the host's WS guard accepts them and
+// reads the host's ws port per-upgrade). The serve config therefore targets only
+// the stable bridge port and is applied ONCE - it no longer tracks the host's ws
+// port, so a host respawn needs no reconfiguration. `pollIntervalMs` is retained
+// in the options for the command surface but is unused now that there is nothing
+// to poll.
 export async function runTailnetBridge(options: RunTailnetBridgeOptions): Promise<void> {
-  const { httpsPort, environment, pollIntervalMs, run, signal } = options;
+  const { httpsPort, environment, run, signal } = options;
 
   const httpServer = await startBridgeHttpServer({
     environment,
@@ -44,43 +43,18 @@ export async function runTailnetBridge(options: RunTailnetBridgeOptions): Promis
     `[tailnet-bridge] HTTP bridge listening on 127.0.0.1:${bridgePort}\n`,
   );
 
-  let lastAppliedWsPort: number | null = null;
-
-  while (!signal.aborted) {
-    let endpoint: BridgeHostEndpoint | null;
-    try {
-      endpoint = await readBridgeHostEndpoint(environment);
-    } catch (err) {
-      process.stderr.write(
-        `[tailnet-bridge] error reading host endpoint: ${String(err)}\n`,
-      );
-      await sleep(pollIntervalMs, signal);
-      continue;
-    }
-
-    if (endpoint === null) {
-      process.stderr.write("[tailnet-bridge] host endpoint not available yet — waiting\n");
-    } else if (endpoint.wsPort !== lastAppliedWsPort) {
-      process.stderr.write(
-        `[tailnet-bridge] applying serve config for wsPort=${endpoint.wsPort}\n`,
-      );
-      try {
-        await applyServeConfig({
-          httpsPort,
-          bridgePort,
-          hostWsPort: endpoint.wsPort,
-          run,
-        });
-        lastAppliedWsPort = endpoint.wsPort;
-      } catch (err) {
-        process.stderr.write(
-          `[tailnet-bridge] error applying serve config: ${String(err)}\n`,
-        );
-      }
-    }
-
-    await sleep(pollIntervalMs, signal);
+  try {
+    await applyServeConfig({ httpsPort, bridgePort, run });
+    process.stderr.write(
+      `[tailnet-bridge] serve config applied (https=${httpsPort} → bridge=${bridgePort})\n`,
+    );
+  } catch (err) {
+    process.stderr.write(
+      `[tailnet-bridge] error applying serve config: ${String(err)}\n`,
+    );
   }
+
+  await waitForAbort(signal);
 
   process.stderr.write("[tailnet-bridge] signal aborted — resetting serve config\n");
 
