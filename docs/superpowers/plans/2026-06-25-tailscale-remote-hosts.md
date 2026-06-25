@@ -29,11 +29,14 @@ Defining these once prevents cross-task drift. Wherever a task references one of
 **Bridge HTTP contract (host side ⇄ client probe):**
 - `GET /whoami` → `200 application/json` body `{ "hostId": string, "version": string }`
 - `GET /healthz` → `200 application/json` body `{ "ok": true }`
-- Client reaches them at `https://<tailnetName>/whoami` and `https://<tailnetName>/healthz` (port 443 via `tailscale serve` HTTPS).
+- Client reaches them at `https://<tailnetName>:<port>/whoami` and `https://<tailnetName>:<port>/healthz` via `tailscale serve` HTTPS.
+
+**Bridge HTTPS port (tailnet-wide):**
+- `export const TAILNET_BRIDGE_HTTPS_PORT = 8443;` — defined in `clients/shared/host-client/tailnet-remote.ts` (Task 2.1) and re-declared identically in `clients/desktop/src/ipc-contracts/remote-host-types.ts` (Task 2.3, since desktop main cannot import `@traycer-clients/shared`). Phase 0 chose **8443** as the single tailnet-wide port (443 can be occupied — this dev box runs `portless` on 443). The bridge `serve` command defaults to 8443 (`--https-port`); the client URL builders and probe/enumerate use the constant. Bridge default and client constant MUST stay equal.
 
 **Remote host addressing:**
 - `tailnetName` = a MagicDNS name, e.g. `studio.tailnet-xyz.ts.net` (no scheme, no port, no trailing dot).
-- Remote RPC URL = `wss://<tailnetName>/rpc` (the `/stream` URL is derived by the existing `toStreamDialUrl`).
+- Remote RPC URL = `wss://<tailnetName>:${TAILNET_BRIDGE_HTTPS_PORT}/rpc` (the `/stream` URL is derived by the existing `toStreamDialUrl`).
 
 **Shared TS types (exact):**
 ```ts
@@ -350,7 +353,7 @@ git commit -m "feat(cli): bridge http server serving /whoami and /healthz"
 
 **Interfaces:**
 - Consumes: `runCommand` from `../service/process-runner` (promisified `execFile`), `RunResult`/`RunOptions`.
-- Produces: `function buildServeArgs(input: { readonly bridgePort: number; readonly hostWsPort: number }): readonly string[][]` (one argv per `tailscale serve` mount; **use the exact form recorded in Task 0.1**); `async function applyServeConfig(input: { readonly bridgePort: number; readonly hostWsPort: number; readonly run: ServeRunner }): Promise<void>`; `async function resetServeConfig(input: { readonly run: ServeRunner }): Promise<void>`; `type ServeRunner = (args: readonly string[]) => Promise<RunResult>`. Inject `ServeRunner` so tests use a fake (no real `tailscale`).
+- Produces: `function buildServeArgs(input: { readonly httpsPort: number; readonly bridgePort: number; readonly hostWsPort: number }): readonly string[][]` (one argv per `tailscale serve` mount; serve form validated in Phase 0: `["serve","--bg",`--https=${httpsPort}`,`--set-path=/whoami`,`${bridge}/whoami`]`); `async function applyServeConfig(input: { readonly httpsPort: number; readonly bridgePort: number; readonly hostWsPort: number; readonly run: ServeRunner }): Promise<void>`; `async function resetServeConfig(input: { readonly run: ServeRunner }): Promise<void>`; `type ServeRunner = (args: readonly string[]) => Promise<RunResult>`. Inject `ServeRunner` so tests use a fake (no real `tailscale`). **`httpsPort` default is 8443** (the tailnet-wide bridge port — Phase 0 chose 8443 because 443 can be occupied; threaded explicitly, no default param).
 
 - [ ] **Step 1: Write the failing test** (fake runner records argv):
 
@@ -360,7 +363,7 @@ import { applyServeConfig, buildServeArgs } from "../serve-config";
 
 describe("serve-config", () => {
   it("builds a serve mount for each backend (Design A)", () => {
-    const args = buildServeArgs({ bridgePort: 41999, hostWsPort: 4917 });
+    const args = buildServeArgs({ httpsPort: 8443, bridgePort: 41999, hostWsPort: 4917 });
     const flat = args.map((a) => a.join(" "));
     expect(flat.some((a) => a.includes("/whoami") && a.includes("41999"))).toBe(true);
     expect(flat.some((a) => a.includes("/rpc") && a.includes("4917"))).toBe(true);
@@ -369,6 +372,7 @@ describe("serve-config", () => {
   it("invokes the runner once per mount", async () => {
     const calls: string[][] = [];
     await applyServeConfig({
+      httpsPort: 8443,
       bridgePort: 41999,
       hostWsPort: 4917,
       run: async (a) => {
@@ -376,7 +380,7 @@ describe("serve-config", () => {
         return { stdout: "", stderr: "", exitCode: 0 };
       },
     });
-    expect(calls.length).toBe(buildServeArgs({ bridgePort: 41999, hostWsPort: 4917 }).length);
+    expect(calls.length).toBe(buildServeArgs({ httpsPort: 8443, bridgePort: 41999, hostWsPort: 4917 }).length);
   });
 });
 ```
@@ -391,25 +395,32 @@ import type { RunResult } from "../service/process-runner";
 export type ServeRunner = (args: readonly string[]) => Promise<RunResult>;
 
 export function buildServeArgs(input: {
+  readonly httpsPort: number;
   readonly bridgePort: number;
   readonly hostWsPort: number;
 }): readonly string[][] {
+  const https = `--https=${input.httpsPort}`;
   const bridge = `http://127.0.0.1:${input.bridgePort}`;
   const host = `http://127.0.0.1:${input.hostWsPort}`;
   return [
-    ["serve", "--bg", "--https=443", "--set-path=/whoami", `${bridge}/whoami`],
-    ["serve", "--bg", "--https=443", "--set-path=/healthz", `${bridge}/healthz`],
-    ["serve", "--bg", "--https=443", "--set-path=/rpc", `${host}/rpc`],
-    ["serve", "--bg", "--https=443", "--set-path=/stream", `${host}/stream`],
+    ["serve", "--bg", https, "--set-path=/whoami", `${bridge}/whoami`],
+    ["serve", "--bg", https, "--set-path=/healthz", `${bridge}/healthz`],
+    ["serve", "--bg", https, "--set-path=/rpc", `${host}/rpc`],
+    ["serve", "--bg", https, "--set-path=/stream", `${host}/stream`],
   ];
 }
 
 export async function applyServeConfig(input: {
+  readonly httpsPort: number;
   readonly bridgePort: number;
   readonly hostWsPort: number;
   readonly run: ServeRunner;
 }): Promise<void> {
-  for (const args of buildServeArgs({ bridgePort: input.bridgePort, hostWsPort: input.hostWsPort })) {
+  for (const args of buildServeArgs({
+    httpsPort: input.httpsPort,
+    bridgePort: input.bridgePort,
+    hostWsPort: input.hostWsPort,
+  })) {
     await input.run(args);
   }
 }
@@ -440,7 +451,7 @@ git commit -m "feat(cli): tailscale serve configurator (path-routed https)"
 
 **Interfaces:**
 - Consumes: `startBridgeHttpServer` (1.2), `applyServeConfig`/`resetServeConfig`/`tailscaleServeRunner` (1.3), `readBridgeHostEndpoint` (1.1).
-- Produces: `async function runTailnetBridge(options: { readonly environment: Environment | undefined; readonly pollIntervalMs: number; readonly run: ServeRunner; readonly signal: AbortSignal }): Promise<void>` — starts the HTTP server, applies serve config, then polls `readBridgeHostEndpoint` every `pollIntervalMs`; when `wsPort` changes it re-applies serve config; on `signal` abort it resets serve config and closes the server. This is the long-lived foreground worker (mirror `monitor.ts`: it does NOT go through `runCommand`/the runner envelope).
+- Produces: `async function runTailnetBridge(options: { readonly httpsPort: number; readonly environment: Environment | undefined; readonly pollIntervalMs: number; readonly run: ServeRunner; readonly signal: AbortSignal }): Promise<void>` — starts the HTTP server (on an ephemeral loopback `bridgePort`), applies serve config (`{ httpsPort, bridgePort, hostWsPort, run }`), then polls `readBridgeHostEndpoint` every `pollIntervalMs`; when `wsPort` changes it re-applies serve config; on `signal` abort it resets serve config and closes the server. This is the long-lived foreground worker (mirror `monitor.ts`: it does NOT go through `runCommand`/the runner envelope).
 
 - [ ] **Step 1: Write the failing test** — drive one reconcile cycle with a fake runner + fast poll + an `AbortController`, asserting serve config is applied at least once and reset on abort. Seed a fake `pid.json` under temp `HOME`.
 
@@ -455,11 +466,12 @@ it("applies serve config on start and resets on abort", async () => {
     calls.push([...a]);
     return { stdout: "", stderr: "", exitCode: 0 };
   };
-  const done = runTailnetBridge({ environment: undefined, pollIntervalMs: 10, run, signal: ac.signal });
+  const done = runTailnetBridge({ httpsPort: 8443, environment: undefined, pollIntervalMs: 10, run, signal: ac.signal });
   await new Promise((r) => setTimeout(r, 50));
   ac.abort();
   await done;
   expect(calls.some((c) => c.join(" ").includes("/rpc"))).toBe(true);
+  expect(calls.some((c) => c.join(" ").includes("--https=8443"))).toBe(true);
   expect(calls.some((c) => c.join(" ").includes("reset"))).toBe(true);
 });
 ```
@@ -476,6 +488,7 @@ import { tailscaleServeRunner } from "../tailnet/serve-config";
 import type { Environment } from "../runner/environment";
 
 export interface TailnetBridgeServeArgs {
+  readonly httpsPort: number;
   readonly environment: Environment | undefined;
   readonly pollIntervalMs: number;
 }
@@ -486,6 +499,7 @@ export async function runTailnetBridgeServe(args: TailnetBridgeServeArgs): Promi
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);
   await runTailnetBridge({
+    httpsPort: args.httpsPort,
     environment: args.environment,
     pollIntervalMs: args.pollIntervalMs,
     run: tailscaleServeRunner(),
@@ -553,10 +567,13 @@ function registerTailnetBridgeCommands(program: Command): void {
     bridge
       .command("serve")
       .description("Run the bridge in the foreground (used by the OS service)")
+      .option("--https-port <port>", "Tailnet HTTPS port for tailscale serve", "8443")
       .option("--poll-interval-ms <ms>", "How often to re-check the host port", "1000"),
   ).action(async (opts: Record<string, unknown>) => {
     try {
       await runTailnetBridgeServe({
+        httpsPort:
+          typeof opts.httpsPort === "string" ? Number.parseInt(opts.httpsPort, 10) : 8443,
         environment: config.environment,
         pollIntervalMs:
           typeof opts.pollIntervalMs === "string" ? Number.parseInt(opts.pollIntervalMs, 10) : 1000,
