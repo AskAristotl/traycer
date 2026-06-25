@@ -631,7 +631,7 @@ Builds the discovery/probe path, the persisted config, the Settings UI, and wire
 
 **Interfaces:**
 - Consumes: `HostDirectoryEntry`, `HostAvailability` (`clients/shared/host-client/host-directory.ts`).
-- Produces: the three interfaces from the Interface Contract (`TailnetWhoami`, `RemoteHostProbe`, `DiscoveredRemoteHost`) + `function normalizeTailnetName(raw: string): string` (trim, strip trailing `.`, lowercase) + `function toRemoteDirectoryEntry(input: { readonly tailnetName: string; readonly hostId: string; readonly label: string; readonly version: string | null; readonly status: HostAvailability }): HostDirectoryEntry` building `websocketUrl: "wss://<tailnetName>/rpc"`, `kind: "remote"`.
+- Produces: the three interfaces from the Interface Contract (`TailnetWhoami`, `RemoteHostProbe`, `DiscoveredRemoteHost`) + `export const TAILNET_BRIDGE_HTTPS_PORT = 8443;` + `function normalizeTailnetName(raw: string): string` (trim, strip trailing `.`, lowercase) + `function toRemoteDirectoryEntry(input: { readonly tailnetName: string; readonly hostId: string; readonly label: string; readonly version: string | null; readonly status: HostAvailability }): HostDirectoryEntry` building `websocketUrl: `wss://${tailnetName}:${TAILNET_BRIDGE_HTTPS_PORT}/rpc``, `kind: "remote"`. `toRemoteDirectoryEntry` reads the constant — no port param (single tailnet-wide port).
 
 - [ ] **Step 1: Write the failing test.**
 
@@ -655,7 +655,7 @@ describe("tailnet-remote", () => {
       hostId: "host-abc",
       label: "Mac Studio",
       kind: "remote",
-      websocketUrl: "wss://studio.tailnet.ts.net/rpc",
+      websocketUrl: "wss://studio.tailnet.ts.net:8443/rpc",
       version: "1.2.3",
       status: "available",
     });
@@ -728,14 +728,15 @@ git commit -m "feat(gui-app): persisted remote-hosts store"
 ### Task 2.3: Electron-main probe + enumeration
 
 **Files:**
+- Create: `clients/desktop/src/ipc-contracts/remote-host-types.ts`
 - Create: `clients/desktop/src/electron-main/host/remote-probe.ts`
 - Test: `clients/desktop/src/electron-main/host/__tests__/remote-probe.test.ts`
 
 **Interfaces:**
-- Consumes: `node:https`, `node:child_process` (for `tailscale status --json`); the JSON shapes from the Interface Contract (`RemoteHostProbe`, `DiscoveredRemoteHost`, `TailnetWhoami`). Desktop main is CommonJS and cannot import `@traycer-clients/shared` — **re-declare** these shapes locally in `ipc-contracts/` (mirror the `DesktopLocalHostSnapshot` duplication rule) as `RemoteHostProbe`/`DiscoveredRemoteHost` in `clients/desktop/src/ipc-contracts/remote-host-types.ts`.
-- Produces: `async function probeRemoteHost(input: { readonly tailnetName: string }): Promise<RemoteHostProbe>` (HTTPS GET `https://<name>/whoami` with a 750ms timeout; parse `{hostId,version}`; on any failure → `{ reachable: false, hostId: null, version: null }`); `async function enumerateTailnetHosts(): Promise<readonly DiscoveredRemoteHost[]>` (run `tailscale status --json`, take online peers' `DNSName`, `probeRemoteHost` each in parallel, keep the reachable ones with a `hostId`). Inject the exec + fetch via params defaulting-free overloads — pass a `deps` object so tests supply fakes.
+- Consumes: `node:https`, `node:child_process` (for `tailscale status --json`); the JSON shapes from the Interface Contract (`RemoteHostProbe`, `DiscoveredRemoteHost`, `TailnetWhoami`) and the port constant. Desktop main is CommonJS and cannot import `@traycer-clients/shared` — **re-declare** these shapes locally in `ipc-contracts/` (mirror the `DesktopLocalHostSnapshot` duplication rule) as `RemoteHostProbe`/`DiscoveredRemoteHost` plus `export const TAILNET_BRIDGE_HTTPS_PORT = 8443;` in `clients/desktop/src/ipc-contracts/remote-host-types.ts` (kept equal to the shared constant by hand).
+- Produces: `async function probeRemoteHost(input: { readonly tailnetName: string }): Promise<RemoteHostProbe>` (HTTPS GET `https://<name>:${TAILNET_BRIDGE_HTTPS_PORT}/whoami` with a 750ms timeout; parse `{hostId,version}`; on any failure → `{ reachable: false, hostId: null, version: null }`); `async function enumerateTailnetHosts(): Promise<readonly DiscoveredRemoteHost[]>` (run `tailscale status --json`, take online peers' `DNSName`, `probeRemoteHost` each in parallel, keep the reachable ones with a `hostId`). Inject the exec + fetch via params defaulting-free overloads — pass a `deps` object so tests supply fakes.
 
-- [ ] **Step 1: Create `ipc-contracts/remote-host-types.ts`** with the re-declared `RemoteHostProbe` + `DiscoveredRemoteHost` (plain-data, `readonly` fields). Keep structurally identical to the shared versions by hand.
+- [ ] **Step 1: Create `ipc-contracts/remote-host-types.ts`** with the re-declared `RemoteHostProbe` + `DiscoveredRemoteHost` (plain-data, `readonly` fields) and `export const TAILNET_BRIDGE_HTTPS_PORT = 8443;`. Keep structurally identical to the shared versions by hand.
 
 - [ ] **Step 2: Write the failing test** for `probeRemoteHost` using an injected fake fetcher:
 
@@ -763,7 +764,7 @@ describe("probeRemoteHost", () => {
 
 - [ ] **Step 3: Run; expect failure.**
 
-- [ ] **Step 4: Implement.** Split into a testable core (`probeRemoteHostWith(input, deps)` where `deps.getWhoami: (name) => Promise<TailnetWhoami>`) and a thin `probeRemoteHost(input)` that supplies the real `node:https` GET (mirror `canReachHostWebsocketUrl`'s single-`settle` + timeout discipline, but do an actual HTTPS GET and JSON-parse the body, validating `typeof hostId === "string"`). Same pattern for `enumerateTailnetHosts` / `enumerateTailnetHostsWith(deps)` where `deps.tailscaleStatusJson: () => Promise<string>` and `deps.probe: (name) => Promise<RemoteHostProbe>`. Parse `tailscale status --json` defensively: read `Peer` map values, keep entries with `Online === true` and a string `DNSName`, normalize the name (strip trailing `.`).
+- [ ] **Step 4: Implement.** Split into a testable core (`probeRemoteHostWith(input, deps)` where `deps.getWhoami: (name) => Promise<TailnetWhoami>`) and a thin `probeRemoteHost(input)` that supplies the real `node:https` GET to `https://${input.tailnetName}:${TAILNET_BRIDGE_HTTPS_PORT}/whoami` (mirror `canReachHostWebsocketUrl`'s single-`settle` + timeout discipline, but do an actual HTTPS GET and JSON-parse the body, validating `typeof hostId === "string"`). `enumerateTailnetHosts` likewise probes each peer at the same port via the same `probeRemoteHost`. Same pattern for `enumerateTailnetHosts` / `enumerateTailnetHostsWith(deps)` where `deps.tailscaleStatusJson: () => Promise<string>` and `deps.probe: (name) => Promise<RemoteHostProbe>`. Parse `tailscale status --json` defensively: read `Peer` map values, keep entries with `Online === true` and a string `DNSName`, normalize the name (strip trailing `.`).
 
 - [ ] **Step 5: Add an `enumerateTailnetHostsWith` test** with a fake status JSON (two peers, one offline) + a fake probe → asserts only the online+reachable peer is returned. Run; expect PASS.
 
