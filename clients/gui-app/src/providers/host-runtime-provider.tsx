@@ -27,7 +27,12 @@ import type { RemoteHostFetcher } from "@traycer-clients/shared/host-client/remo
 import type { VersionedRpcRegistry } from "@traycer/protocol/framework/index";
 import { AuthService } from "@/lib/auth/auth-service";
 import { HostDirectoryService } from "@/lib/host/host-directory-service";
+import {
+  installRemoteHostsRefresh,
+  REMOTE_HOSTS_REFRESH_INTERVAL_MS,
+} from "@/lib/host/remote-hosts-refresh";
 import { createHostQueryInvalidator } from "@/lib/host/query-invalidator";
+import { useRemoteHostsStore } from "@/stores/remote-hosts/remote-hosts-store";
 import { useRunnerHost } from "@/providers/use-runner-host";
 
 export interface HostRuntimeBinding<Registry extends VersionedRpcRegistry> {
@@ -221,6 +226,7 @@ export function createHostRuntime<
       });
 
       const activeRuntime = runtime;
+      let disposeRemoteRefresh: (() => void) | null = null;
       void (async () => {
         await auth.start();
         if (isDisposed()) {
@@ -237,6 +243,15 @@ export function createHostRuntime<
           return;
         }
         activeRuntime.start();
+        disposeRemoteRefresh = installRemoteHostsRefresh({
+          refresh: () => { void directory.refresh(); },
+          subscribe: (listener) => useRemoteHostsStore.subscribe(listener),
+          scheduleInterval: (callback, ms) => {
+            const id = setInterval(callback, ms);
+            return () => clearInterval(id);
+          },
+          intervalMs: REMOTE_HOSTS_REFRESH_INTERVAL_MS,
+        });
         const nextBinding = {
           runtime: activeRuntime,
           hostClient: activeRuntime.hostClient,
@@ -249,6 +264,7 @@ export function createHostRuntime<
 
       return () => {
         lifecycle.disposed = true;
+        disposeRemoteRefresh?.();
         activeRuntime.dispose();
         directory.dispose();
         auth.dispose();

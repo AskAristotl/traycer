@@ -30,7 +30,7 @@ import {
   type CompatRecoveryPlan,
 } from "../host/compat-recovery";
 import type { IncompatibilityUpgradeGuidance } from "@traycer/protocol/framework/index";
-import type { Environment } from "../runner/environment";
+import { credentialEnvironment, type Environment } from "../runner/environment";
 import { CliError } from "../runner/errors";
 import {
   createServiceController,
@@ -446,7 +446,7 @@ function formatMarkerMessage(entry: BootstrapLogEntry): string {
 async function probeWindowsCredentialsAcl(
   environment: Environment,
 ): Promise<DoctorIssue | null> {
-  const credentialsPath = cliCredentialsPath(environment);
+  const credentialsPath = cliCredentialsPath(credentialEnvironment(environment));
   try {
     await stat(credentialsPath);
   } catch {

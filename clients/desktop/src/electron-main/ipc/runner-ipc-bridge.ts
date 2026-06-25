@@ -63,6 +63,11 @@ import {
   aggregateUnsyncedSnapshots,
   registerLifecycleIpc,
 } from "./lifecycle-ipc";
+import { registerRemoteHostsIpc } from "./remote-hosts-ipc";
+import {
+  probeRemoteHost,
+  enumerateTailnetHosts,
+} from "../host/remote-probe";
 
 /**
  * Minimal window surface the bridge needs. Declaring it structurally lets
@@ -328,6 +333,10 @@ export class RunnerIpcBridge {
     // Power IPC (renderer-driven sleep prevention) registers a `disposeFn`
     // that releases the OS power-save blocker on teardown.
     registerPowerIpc(this);
+    registerRemoteHostsIpc(this, {
+      probe: probeRemoteHost,
+      enumerate: enumerateTailnetHosts,
+    });
   }
 
   /**

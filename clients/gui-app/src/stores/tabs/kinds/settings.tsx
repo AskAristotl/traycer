@@ -29,6 +29,8 @@ function settingsRouteOptions(section: SettingsSectionId) {
       return { to: "/settings/shell" } as const;
     case "worktrees":
       return { to: "/settings/worktrees" } as const;
+    case "remote-hosts":
+      return { to: "/settings/remote-hosts" } as const;
     case "host":
       return { to: "/settings/host" } as const;
   }

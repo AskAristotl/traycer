@@ -125,6 +125,7 @@ export const PERSIST_STORES = [
     leaf: "workspace-folders",
     kind: "static",
   },
+  { camelName: "remoteHosts", leaf: "remote-hosts", kind: "static" },
 
   // ── Non-zustand keys (enumeration only; builders NOT refactored here) ─────
   // `last-route:<windowId>` — per-window router history (persistent-history.ts).

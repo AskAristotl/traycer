@@ -159,6 +159,8 @@ export const RunnerHostInvoke = {
   traycerCliManifestRead: "runnerHost:traycer:cli:manifestRead",
   traycerHostNameGet: "runnerHost:traycer:host:name:get",
   traycerHostNameSet: "runnerHost:traycer:host:name:set",
+  remoteHostsProbe: "runnerHost:remoteHosts:probe",
+  remoteHostsEnumerate: "runnerHost:remoteHosts:enumerate",
 } as const;
 
 export const RunnerHostEvent = {

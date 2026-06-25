@@ -18,6 +18,7 @@ import { Route as EpicsIndexRouteImport } from "./routes/epics/index";
 import { Route as SettingsWorktreesRouteImport } from "./routes/settings.worktrees";
 import { Route as SettingsShellRouteImport } from "./routes/settings.shell";
 import { Route as SettingsServiceRouteImport } from "./routes/settings.service";
+import { Route as SettingsRemoteHostsRouteImport } from "./routes/settings.remote-hosts";
 import { Route as SettingsProvidersRouteImport } from "./routes/settings.providers";
 import { Route as SettingsKeybindingsRouteImport } from "./routes/settings.keybindings";
 import { Route as SettingsHostRouteImport } from "./routes/settings.host";
@@ -71,6 +72,11 @@ const SettingsShellRoute = SettingsShellRouteImport.update({
 const SettingsServiceRoute = SettingsServiceRouteImport.update({
   id: "/service",
   path: "/service",
+  getParentRoute: () => SettingsRoute,
+} as any);
+const SettingsRemoteHostsRoute = SettingsRemoteHostsRouteImport.update({
+  id: "/remote-hosts",
+  path: "/remote-hosts",
   getParentRoute: () => SettingsRoute,
 } as any);
 const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   "/settings/host": typeof SettingsHostRoute;
   "/settings/keybindings": typeof SettingsKeybindingsRoute;
   "/settings/providers": typeof SettingsProvidersRoute;
+  "/settings/remote-hosts": typeof SettingsRemoteHostsRoute;
   "/settings/service": typeof SettingsServiceRoute;
   "/settings/shell": typeof SettingsShellRoute;
   "/settings/worktrees": typeof SettingsWorktreesRoute;
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   "/settings/host": typeof SettingsHostRoute;
   "/settings/keybindings": typeof SettingsKeybindingsRoute;
   "/settings/providers": typeof SettingsProvidersRoute;
+  "/settings/remote-hosts": typeof SettingsRemoteHostsRoute;
   "/settings/service": typeof SettingsServiceRoute;
   "/settings/shell": typeof SettingsShellRoute;
   "/settings/worktrees": typeof SettingsWorktreesRoute;
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   "/settings/host": typeof SettingsHostRoute;
   "/settings/keybindings": typeof SettingsKeybindingsRoute;
   "/settings/providers": typeof SettingsProvidersRoute;
+  "/settings/remote-hosts": typeof SettingsRemoteHostsRoute;
   "/settings/service": typeof SettingsServiceRoute;
   "/settings/shell": typeof SettingsShellRoute;
   "/settings/worktrees": typeof SettingsWorktreesRoute;
@@ -193,6 +202,7 @@ export interface FileRouteTypes {
     | "/settings/host"
     | "/settings/keybindings"
     | "/settings/providers"
+    | "/settings/remote-hosts"
     | "/settings/service"
     | "/settings/shell"
     | "/settings/worktrees"
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
     | "/settings/host"
     | "/settings/keybindings"
     | "/settings/providers"
+    | "/settings/remote-hosts"
     | "/settings/service"
     | "/settings/shell"
     | "/settings/worktrees"
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | "/settings/host"
     | "/settings/keybindings"
     | "/settings/providers"
+    | "/settings/remote-hosts"
     | "/settings/service"
     | "/settings/shell"
     | "/settings/worktrees"
@@ -311,6 +323,13 @@ declare module "@tanstack/react-router" {
       path: "/service";
       fullPath: "/settings/service";
       preLoaderRoute: typeof SettingsServiceRouteImport;
+      parentRoute: typeof SettingsRoute;
+    };
+    "/settings/remote-hosts": {
+      id: "/settings/remote-hosts";
+      path: "/remote-hosts";
+      fullPath: "/settings/remote-hosts";
+      preLoaderRoute: typeof SettingsRemoteHostsRouteImport;
       parentRoute: typeof SettingsRoute;
     };
     "/settings/providers": {
@@ -398,6 +417,7 @@ interface SettingsRouteChildren {
   SettingsHostRoute: typeof SettingsHostRoute;
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute;
   SettingsProvidersRoute: typeof SettingsProvidersRoute;
+  SettingsRemoteHostsRoute: typeof SettingsRemoteHostsRoute;
   SettingsServiceRoute: typeof SettingsServiceRoute;
   SettingsShellRoute: typeof SettingsShellRoute;
   SettingsWorktreesRoute: typeof SettingsWorktreesRoute;
@@ -411,6 +431,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsHostRoute: SettingsHostRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
   SettingsProvidersRoute: SettingsProvidersRoute,
+  SettingsRemoteHostsRoute: SettingsRemoteHostsRoute,
   SettingsServiceRoute: SettingsServiceRoute,
   SettingsShellRoute: SettingsShellRoute,
   SettingsWorktreesRoute: SettingsWorktreesRoute,

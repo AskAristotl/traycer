@@ -6,6 +6,7 @@ import { AppearanceSettingsPanel } from "@/components/settings/panels/appearance
 import { KeybindingsSettingsPanel } from "@/components/settings/panels/keybindings-settings-panel";
 import { ShellSettingsPanel } from "@/components/settings/panels/shell-settings-panel";
 import { WorktreesSettingsPanel } from "@/components/settings/panels/worktrees-settings-panel";
+import { RemoteHostsSettingsPanel } from "@/components/settings/panels/remote-hosts-settings-panel";
 import { HostSettingsPanel } from "@/components/settings/panels/host-settings-panel";
 import { ProvidersSettingsPanel } from "@/components/settings/panels/providers-settings-panel";
 import { AgentsSettingsPanel } from "@/components/settings/panels/agents-settings-panel";
@@ -59,6 +60,8 @@ function SettingsPanelForSection(props: {
       return <ShellSettingsPanel />;
     case "worktrees":
       return <WorktreesSettingsPanel />;
+    case "remote-hosts":
+      return <RemoteHostsSettingsPanel />;
     case "host":
       return <HostSettingsPanel />;
   }

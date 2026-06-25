@@ -54,6 +54,10 @@ import type {
   TrustedCertificateEntry,
   Vibrancy,
 } from "../ipc-contracts/platform-types";
+import type {
+  RemoteHostProbe,
+  DiscoveredRemoteHost,
+} from "../ipc-contracts/remote-host-types";
 import {
   readEncryptedItem,
   removeEncryptedItem,
@@ -176,6 +180,7 @@ export interface DesktopPreloadBridge {
   power: DesktopPowerBridge;
   hostManagement: DesktopHostManagementBridge;
   hostTray: DesktopHostTrayBridge;
+  readonly remoteHosts: DesktopRemoteHostsBridge;
 }
 
 export interface DesktopFileDropsBridge {
@@ -241,6 +246,13 @@ export interface DesktopHostTrayBridge {
   onCommand(handler: (command: HostTrayCommand) => void): {
     dispose: () => void;
   };
+}
+
+export interface DesktopRemoteHostsBridge {
+  readonly probe: (input: {
+    readonly tailnetName: string;
+  }) => Promise<RemoteHostProbe>;
+  readonly enumerate: () => Promise<readonly DiscoveredRemoteHost[]>;
 }
 
 export interface DesktopMigrationBridge {
