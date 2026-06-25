@@ -51,6 +51,9 @@ interface. A host-side forwarder is therefore **required**, not optional.
   single account** (see "Accounts & authorization"); separate-account access is
   gated server-side and cannot be enabled from this fork.
 - No changes to the closed host binary or the agent-harness integration.
+- The host-side bridge OS-service targets **macOS (launchd) + Linux (systemd)** only;
+  a Windows bridge service is out of scope for v1 (the shared service controller's
+  Windows task naming/manifest path don't key on the bridge label).
 - Inherited remote limitations are accepted and documented, not fixed:
   - OAuth provider re-auth on a remote host routes to the CLI
     (`provider-reauth-banner.tsx`).
