@@ -45,7 +45,9 @@ interface. A host-side forwarder is therefore **required**, not optional.
 - No relay/tunnel server (Tailscale is the transport).
 - No automatic tailnet enumeration (hosts are added manually; auto-discovery is
   a possible later enhancement).
-- No cross-account sharing (both machines log into the **same** Traycer account).
+- No cross-account authorization work. Multi-person use is served by a **shared
+  single account** (see "Accounts & authorization"); separate-account access is
+  gated server-side and cannot be enabled from this fork.
 - No changes to the closed host binary or the agent-harness integration.
 - Inherited remote limitations are accepted and documented, not fixed:
   - OAuth provider re-auth on a remote host routes to the CLI
@@ -78,10 +80,42 @@ interface. A host-side forwarder is therefore **required**, not optional.
    connection still runs in the renderer via the existing transport (Tailscale
    certs are publicly trusted).
 
-4. **Same Traycer account on both machines.** The client's bearer is threaded
-   into the WS open-frame and validated by the *remote* host
-   (`ws-rpc-client.ts:184`) — the cross-device-sync model. Cross-account sharing
-   is out of scope.
+4. **All participants share ONE Traycer account (shared-account model).** See
+   "Accounts & authorization" below. The client's bearer is threaded into the WS
+   open-frame and validated by the *remote* host (`ws-rpc-client.ts:184`); the
+   host then applies **server-side team-backed role checks**
+   (`request-context.ts:194-199`). A single shared account makes every
+   client/host the same `userId` (owner role, full `canAct`), which is the only
+   topology this fork can guarantee — cross-account authorization is enforced in
+   the closed host/cloud and is out of our control.
+
+## Accounts & authorization (multi-person)
+
+Target use: three people (you, a colleague, a shared Mac Studio), each able to
+reach the others' hosts. The **network** layer (Tailscale) handles N machines
+trivially. The **authorization** layer does not, and it is decided server-side:
+
+- The host verifies the bearer JWT, then runs **team-backed role checks**
+  (`request-context.ts:194-199`); access is an org/team/role property
+  (`role: "owner"|"viewer"`, `canAct` — `subscribe.ts:274-276`), and the host is
+  "single-user today" (`provider-schemas.ts:103`). Enforcement is in the closed
+  host + cloud, **not in this repo**.
+
+Options, in order of certainty:
+
+1. **Shared single account (chosen for v1).** All three sign into the *same*
+   Traycer account on their devices. Every bearer/host is one `userId` → owner +
+   `canAct`. The Tailscale design works unchanged; topology is just three
+   machines each running the bridge, each addable as a remote host. Caveats: no
+   per-person attribution; the "single-user today" host may show concurrency
+   rough edges under simultaneous use; provider (Claude/Codex) auth stays
+   per-machine regardless; sharing a seat is a Traycer-ToS gray area.
+2. **Same Traycer Team/org (possible upgrade, unverified).** Preserves
+   identities, but a connecting teammate may resolve to `viewer`/limited
+   `canAct`, and host-connection behavior is server-enforced and not verifiable
+   from this repo. May require a paid Team plan.
+3. **Three independent accounts (not viable).** Tokens authenticate but have no
+   shared role → server-side authz denies cross-host access.
 
 ## Architecture
 
@@ -168,7 +202,8 @@ Client machine (you)                          Host machine (on tailnet)
 
 ## Assumptions & constraints
 
-- Both machines are logged into the **same Traycer account**.
+- All participants/devices are logged into **one shared Traycer account** (see
+  "Accounts & authorization"). Separate-account access is out of scope.
 - **Tailscale HTTPS / MagicDNS certs are enabled** on the tailnet (one-time
   admin-console toggle).
 - The signed host binary binds `127.0.0.1` and is not modifiable.
