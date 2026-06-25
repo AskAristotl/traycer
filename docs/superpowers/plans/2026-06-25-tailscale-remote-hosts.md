@@ -123,6 +123,16 @@ curl -sS https://<machine>.<tailnet>.ts.net/whoami    # expect {"hostId":"spike"
 
 > Do not start Phase 1 until Task 0.1 has a recorded GO (Design A) or the NO-GO/Design-B note.
 
+### Phase 0 RESULT (2026-06-25): ✅ GO — Design A
+
+Validated on `dylans-macbook-pro.mercat-elver.ts.net` (Tailscale CLI 1.94.1 / daemon 1.98.5):
+- `tailscale serve --bg --https=<PORT> --set-path=/<p> http://127.0.0.1:<port>/<p>` applies cleanly; `serve status` shows the path→backend table.
+- Real Let's Encrypt cert issued for the MagicDNS name (`tailscale cert` + observed issuer `Let's Encrypt CN=YE2`).
+- `GET /whoami` → `{"hostId":...,"version":...}`, `GET /healthz` → `{"ok":true}`.
+- **`wss://<name>:<PORT>/rpc` upgrade echoed** — WebSocket survives the serve proxy. GO.
+- **Path-in-target is required:** `--set-path=/whoami http://127.0.0.1:9101` (no path) STRIPS the mount and forwards to backend root (→ 404). The target MUST carry the path: `…9101/whoami`. The plan's `buildServeArgs` already does this — keep it.
+- **Serve PORT must be configurable (default 443).** On a machine where another process owns `:443` (this dev box runs `portless proxy --port 443`), the bridge must serve on an alternate HTTPS port and the client must address `wss://<name>:<PORT>/rpc`. **Amendment:** Task 1.3 `buildServeArgs` takes `httpsPort` (default 443); Task 1.4 `serve` accepts `--https-port`; the client remote-host addressing (Tasks 2.1/2.6) carries an optional port and builds `wss://<name>[:<port>]/rpc`. Decide a tailnet-wide convention port across the three machines so discovery doesn't need a per-host port.
+
 ---
 
 ## Phase 1 — Host-side bridge (`@traycer-clients/traycer-cli`)
