@@ -1,6 +1,11 @@
 import { createServer, connect, type Socket } from "node:net";
 import type { Environment } from "../runner/environment";
+import type { DiscoveredRemoteHost } from "@traycer-clients/shared/host-client/tailnet-remote";
 import { readBridgeHostEndpoint } from "./host-endpoint";
+import { enumerateTailnetHosts } from "./discover";
+
+/** Enumerates the Traycer hosts reachable on this machine's tailnet. */
+export type TailnetDiscoverer = () => Promise<readonly DiscoveredRemoteHost[]>;
 
 export interface BridgeHttpServer {
   readonly port: number;
@@ -11,6 +16,12 @@ export interface StartBridgeHttpServerOptions {
   readonly environment: Environment | undefined;
   readonly host: string;
   readonly port: number;
+  /**
+   * Tailnet host enumerator backing `GET /discover`. Defaults to the real
+   * `tailscale status --json` + `/whoami` probe; tests inject a fake to avoid
+   * shelling out.
+   */
+  readonly discover?: TailnetDiscoverer;
 }
 
 // The host's WS endpoints the bridge re-originates over loopback. Anything else
@@ -36,6 +47,12 @@ function jsonResponse(status: number, statusText: string, body: unknown): string
   return (
     `HTTP/1.1 ${status} ${statusText}\r\n` +
     `Content-Type: application/json\r\n` +
+    // The bridge's JSON endpoints (`/healthz`, `/whoami`, `/discover`) carry
+    // only non-sensitive host metadata and must be readable by a browser PWA
+    // served from a different tailnet origin, so allow any origin. The
+    // sensitive surface (`/rpc`, `/stream`) is a WebSocket upgrade, which is
+    // not CORS-gated and never flows through here.
+    `Access-Control-Allow-Origin: *\r\n` +
     `Content-Length: ${Buffer.byteLength(payload)}\r\n` +
     `Connection: close\r\n\r\n` +
     payload
@@ -82,6 +99,7 @@ function rewriteForLoopback(
 
 async function routeRequest(
   environment: Environment | undefined,
+  discover: TailnetDiscoverer,
   clientSocket: Socket,
   headText: string,
   rest: Buffer,
@@ -106,6 +124,20 @@ async function routeRequest(
             version: endpoint.version,
           }),
     );
+    return;
+  }
+  if (method === "GET" && path === "/discover") {
+    // Enumerate the tailnet's Traycer hosts so a mobile client bootstraps the
+    // whole tailnet from this one reachable bridge. `enumerateTailnetHosts`
+    // never throws, but guard anyway so a discovery fault can't take the
+    // bridge down — an empty list degrades to "no remote hosts found".
+    let hosts: readonly DiscoveredRemoteHost[] = [];
+    try {
+      hosts = await discover();
+    } catch {
+      hosts = [];
+    }
+    clientSocket.end(jsonResponse(200, "OK", { hosts }));
     return;
   }
   if (PROXIED_WS_PATHS.has(path) && hasWebSocketUpgrade(headerLines)) {
@@ -156,6 +188,8 @@ export function startBridgeHttpServer(
     socket.once("close", () => activeSockets.delete(socket));
   };
 
+  const discover = options.discover ?? enumerateTailnetHosts;
+
   const server = createServer((socket) => {
     track(socket);
     socket.on("error", () => undefined);
@@ -170,9 +204,14 @@ export function startBridgeHttpServer(
       socket.removeListener("data", onData);
       const headText = buffer.subarray(0, end).toString("utf8");
       const rest = buffer.subarray(end + HEAD_TERMINATOR.length);
-      void routeRequest(options.environment, socket, headText, rest, track).catch(
-        () => socket.destroy(),
-      );
+      void routeRequest(
+        options.environment,
+        discover,
+        socket,
+        headText,
+        rest,
+        track,
+      ).catch(() => socket.destroy());
     };
     socket.on("data", onData);
   });

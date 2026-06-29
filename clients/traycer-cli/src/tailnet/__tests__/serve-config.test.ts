@@ -6,6 +6,7 @@ describe("serve-config", () => {
     const args = buildServeArgs({ httpsPort: 8443, bridgePort: 41999 });
     const flat = args.map((a) => a.join(" "));
     expect(flat.some((a) => a.includes("/whoami") && a.includes("41999"))).toBe(true);
+    expect(flat.some((a) => a.includes("/discover") && a.includes("41999"))).toBe(true);
     // /rpc + /stream now target the bridge port, not the host ws port, so the
     // bridge can rewrite Host/Origin before re-originating to the host.
     expect(flat.some((a) => a.includes("/rpc") && a.includes("41999"))).toBe(true);

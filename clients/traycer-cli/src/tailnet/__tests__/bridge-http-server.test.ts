@@ -115,6 +115,54 @@ describe("bridge-http-server", () => {
     }
   });
 
+  it("sends an Access-Control-Allow-Origin header so a browser PWA can read it", async () => {
+    const server = await startBridgeHttpServer({ environment: undefined, host: "127.0.0.1", port: 0 });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.port}/healthz`);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("serves /discover with the injected tailnet host enumerator", async () => {
+    const hosts = [
+      { tailnetName: "studio.ts.net", hostId: "h1", version: "1.0.0" },
+      { tailnetName: "laptop.ts.net", hostId: "h2", version: "1.0.0" },
+    ];
+    const server = await startBridgeHttpServer({
+      environment: undefined,
+      host: "127.0.0.1",
+      port: 0,
+      discover: async () => hosts,
+    });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.port}/discover`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ hosts });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("serves /discover as an empty list when discovery throws", async () => {
+    const server = await startBridgeHttpServer({
+      environment: undefined,
+      host: "127.0.0.1",
+      port: 0,
+      discover: async () => {
+        throw new Error("tailscale unavailable");
+      },
+    });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.port}/discover`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ hosts: [] });
+    } finally {
+      await server.close();
+    }
+  });
+
   it("serves /whoami with host running", async () => {
     const tempHome = await mkdtemp(join(tmpdir(), "traycer-bridge-"));
     const originalHome = process.env.HOME;
