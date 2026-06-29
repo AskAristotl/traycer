@@ -20,6 +20,8 @@ import type { TokenUsage } from "@traycer/protocol/persistence/epic/foundation";
 import type { ChatRunSettings } from "@traycer/protocol/host/agent/gui/subscribe";
 import type { WorktreeBinding } from "@traycer/protocol/host/worktree-schemas";
 import { ChatMessages } from "@/components/chat/chat-messages";
+import { MobileChatMessages } from "@/components/chat/mobile-chat-messages";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
 import { ChatMarkdownLinkProvider } from "@/components/chat/chat-markdown-link-provider";
 import {
   ChatForkDialog,
@@ -1421,6 +1423,9 @@ function ContextUsageChipForChat(props: {
 function ChatSessionMessagesSurface(
   props: ChatSessionMessagesSurfaceProps,
 ): ReactNode {
+  // Mobile uses the free react-virtuoso transcript; desktop keeps the paid
+  // VirtuosoMessageList. Read unconditionally (before any early return).
+  const isMobile = useIsMobile();
   // A fatal close before any snapshot (CHAT_INVALID, CHAT_NOT_VISIBLE, …) means
   // the host will never send one. Surface the reason + a retry instead of an
   // indefinite spinner.
@@ -1449,16 +1454,24 @@ function ChatSessionMessagesSurface(
             hostId={props.tabHostId}
             workspaceRoots={props.workspaceRoots}
           >
-            <ChatMessages
-              taskTitle={props.node.name}
-              messages={props.messages}
-              minimapItems={props.minimapItems}
-              scrollStateKey={props.node.instanceId}
-              getMessageActions={props.getMessageActions}
-              nextStepActions={props.nextStepActions}
-              instanceId={props.node.instanceId}
-              visible={props.surfaceVisible}
-            />
+            {isMobile ? (
+              <MobileChatMessages
+                messages={props.messages}
+                getMessageActions={props.getMessageActions}
+                nextStepActions={props.nextStepActions}
+              />
+            ) : (
+              <ChatMessages
+                taskTitle={props.node.name}
+                messages={props.messages}
+                minimapItems={props.minimapItems}
+                scrollStateKey={props.node.instanceId}
+                getMessageActions={props.getMessageActions}
+                nextStepActions={props.nextStepActions}
+                instanceId={props.node.instanceId}
+                visible={props.surfaceVisible}
+              />
+            )}
           </ChatMarkdownLinkProvider>
         </WorkingVerbContext.Provider>
       </ChatPlanActionsContext.Provider>
