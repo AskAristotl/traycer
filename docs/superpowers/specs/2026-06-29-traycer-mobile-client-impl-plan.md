@@ -9,7 +9,7 @@ Execution checklist for `2026-06-29-traycer-mobile-client-design.md`. TDD, green
 | 1a — bridge `/discover` + CORS | ✅ done | 6 shared + 18 traycer-cli tests, tsc, lint |
 | 1b — mobile gateway (PWA serve + `/authn/*` proxy) | ✅ done | 17 tests, tsc, lint |
 | 2 — `WebRunnerHost` + Vite/PWA entry | ✅ done | 19 tests, tsc, lint, **full `vite build` of gui-app** |
-| 3 — responsive reuse (no custom screens) | ✅ (a) done / 🟡 (b) interactive | full gui-app mounts on mobile (build green); fresh epics are single-pane already. Panel pixel-polish (b) needs a live session to verify — interactive |
+| 3 — responsive reuse (no custom screens) | ✅ (a) + canvas collapse done / 🟡 panel pixel-polish interactive | full gui-app mounts on mobile (build green); SplitContainer collapses to a single scrollable column on mobile (3 tests, 36 canvas tests green). Pixel-polish *inside* tiles (diff renderer, composer density) needs a live on-device session |
 | 4 — lifecycle (`onSystemResumed` + token-on-resume) | ✅ done | `WebRunnerHost.onSystemResumed` (visibilitychange+online) wired into existing `stream-wake-reconnect`; token staleness via existing 401→refresh through the proxy. 8 tests |
 | 5 — Capacitor target | ✅ scaffold done | `clients/mobile` (MobileRunnerHost reusing WebRunnerHost + native deps); tsc + lint + `vite build` green. `cap add ios/android` + scheme + signing human-gated |
 
