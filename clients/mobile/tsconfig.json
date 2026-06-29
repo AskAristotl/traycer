@@ -19,13 +19,13 @@
     "baseUrl": ".",
     "paths": {
       "@traycer-clients/shared/*": ["../shared/*"],
-      "@traycer-clients/web/*": ["./src/*"],
+      "@traycer-clients/web": ["../web/index.ts"],
       "@traycer-clients/gui-app": ["../gui-app/index"],
       "@traycer/protocol/utils/*": ["../../protocol/utils/*"],
       "@traycer/protocol/*": ["../../protocol/src/*"],
       "@/*": ["../gui-app/src/*"]
     }
   },
-  "include": ["index.ts", "src", "vite.config.ts", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src", "capacitor.config.ts", "vite.config.ts"],
+  "exclude": ["node_modules", "dist", "ios", "android"]
 }
