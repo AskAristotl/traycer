@@ -56,8 +56,17 @@ Reused unchanged:
 
 ## 4. Decisions (with rationale)
 
-### D1 — Path B: purpose-built mobile surface, not workspace reflow. **Terminal out of v1.**
-The workspace is a recursive resizable split-tree, not a multi-column layout that "collapses." There is no single column it degrades to — it's *replace*, not *reflow*. So mobile mounts the **full gui-app** and **branches at the epic route** (reusing auth, host directory, providers, stores, protocol) but renders mobile screens **instead of `TileCanvas`**. The terminal (xterm) and code editing are **out of v1** — they're the worst mobile UX and the heaviest DOM, and Path B doesn't mount them, so the draft's "DOM-bound blockers" anxiety largely evaporates.
+### D1 — Full gui-app reuse + responsive layout. **No custom screens.**
+The whole thesis (and the reason a DOM-rendering shell beats React Native) is "reuse 100% of gui-app." So mobile mounts the **entire, unmodified gui-app** through the web/Capacitor shell — same routes, same components, same stores. The earlier "Path B / purpose-built mobile surface that bypasses `TileCanvas`" idea is **retracted**: building custom Inbox/chat/diff screens would *duplicate* the chat/diff/composer components, which is more code and *less* reuse — the opposite of the point.
+
+`TileCanvas` is not an obstacle to reuse. It already has a **single-group / tabbed mode**: a tab group renders a horizontally-scrollable tab strip (`tab-strip.tsx` already uses `touch-pan-x overflow-x-auto`) plus one active tile filling the rest — i.e. a one-tile-at-a-time view. The recursive split-tree only appears when the user *creates* splits; on mobile we simply don't offer the drag-to-split affordance, so it stays one pane.
+
+So the mobile UI work is the draft's original **§4 responsive layout**, done properly and reusing every tile:
+- **Constrain the canvas to single-pane on mobile** (no splits, hide resize handles; the existing tab strip is the switcher).
+- **Make the tile contents responsive** to a ~390px viewport (the chat list is already vertical; the diff switches side-by-side → inline; the composer fits; etc.).
+- The **terminal stays available** (it renders in the DOM) but isn't a primary mobile target; no need to remove it.
+
+Sequence: **(a)** ship the unmodified gui-app on the phone first (already true once the shell is built) to see what's actually cramped, then **(b)** responsive-polish the panels that need it, against fast browser reload. The mobile "home" is the **existing epic list** — no new Inbox surface.
 
 ### D2 — Shell: **Capacitor end-state, reached via a throwaway PWA spike. Tauri dropped.**
 - **Tauri dropped.** Nothing in the analysis favors Tauri *over* Capacitor; the draft's Tauri rationale ("keeps 100% of gui-app," "native keychain") is equally true of Capacitor. Capacitor is what the repo's `IRunnerHost` docblock already names, has mature mobile/native-HTTP/keychain/push plugins, and the draft's own §8 admits Tauri-mobile is the least-trodden surface.
@@ -79,11 +88,11 @@ The host validates the bearer JWT per-connection and runs team-backed role check
 ### D5 — Discovery: **bridge `/discover` endpoint; bootstrap from one configured host.**
 Relocate the existing, test-covered `enumerateTailnetHosts` (`clients/desktop/src/electron-main/host/remote-probe.ts`: `tailscale status --json` + per-peer `/whoami`) into the bridge runtime (it runs on a desktop that *has* the `tailscale` CLI and already shells out) and expose it at `GET /discover`. The phone bootstraps from **one** configured bridge (default: Plato) and auto-discovers the whole tailnet (any node sees all peers). The `WebRunnerHost` injects `enumerate: () => fetch('https://<bootstrap>:8443/discover')`; `MobileHostGate`'s zero/one/many flow then works as the draft envisioned. No new credential; tailnet-gated like `/whoami`. (Rejected alternatives: Tailscale Admin API — needs an admin secret on-device, Capacitor-only; LocalAPI — inaccessible to third-party mobile apps; mDNS — doesn't traverse the mesh.)
 
-### D6 — Screens: **Inbox-first, 3 screens.**
-1. **Inbox (home)** — attention-first feed over the existing cross-epic notifications stream: approval requests, `awaiting-input`, errored, turn-complete; tap → jump to the epic. This is the deliberate divergence from the desktop's workspace-first model and the whole point of the phone client.
-2. **Epic chat** — reused `react-virtuoso` transcript + a **simplified plain-text composer** (steer via `agent.sendMessage`; Tiptap rich/@mentions deferred) + **inline approval cards** (big approve/reject/dismiss targets, `runtimeApprovalDecision`) + a **permission-mode toggle** (flip an agent to auto-approve from the phone so you're not tapping 20× — a force-multiplier for the inbox model).
-3. **Changes** — minimal **read-only** diff, file-by-file (first thing to cut if time-boxed).
-- **No new-epic creation** on mobile in v1 (you start work at the desk).
+### D6 — Surfaces: **reuse gui-app's existing screens; no new screens.**
+- **Home** = the existing **epic list** (`/epics`). No new Inbox surface (it would be net-new UI, not reuse).
+- **Epic** = the existing canvas in **single-pane mode** (D1): the existing chat tile (real `react-virtuoso` transcript + the real composer + the real `runtimeApprovalDecision` approval UI), the existing diff tile, etc., switched via the existing tab strip.
+- The mobile-specific work is **responsive layout**, not new components: single-pane canvas + panels that fit a phone. Steer, approve, diff, permission-mode are all the gui-app's own UI, reused as-is.
+- Nothing is *removed* on mobile either — the terminal/editor tiles still render (DOM); they're just not primary.
 
 ### D7 — Connection lifecycle: **implement `onSystemResumed` on mobile (don't no-op it).**
 Reconnect correctness is already solved and reused (heartbeat, jittered backoff, auto-resubscribe, snapshot-delta resync). The only gap is the *resume trigger*: `IRunnerHost.onSystemResumed` no-ops on web/mobile, and `window` `online` doesn't fire on app-foreground/unlock — so a re-opened app stares at a stale inbox until the heartbeat times out. Implement `onSystemResumed`:

@@ -2,6 +2,19 @@
 
 Execution checklist for `2026-06-29-traycer-mobile-client-design.md`. TDD, green per step, commit per sub-step on `feat/mobile-client`.
 
+## Status (2026-06-29)
+
+| Step | State | Verification |
+|---|---|---|
+| 1a — bridge `/discover` + CORS | ✅ done | 6 shared + 18 traycer-cli tests, tsc, lint |
+| 1b — mobile gateway (PWA serve + `/authn/*` proxy) | ✅ done | 17 tests, tsc, lint |
+| 2 — `WebRunnerHost` + Vite/PWA entry | ✅ done | 19 tests, tsc, lint, **full `vite build` of gui-app** |
+| 3 — responsive reuse (single-pane canvas + responsive panels) | ⏳ in progress | full gui-app reuse; no custom screens (Path B retracted) |
+| 4 — lifecycle (`onSystemResumed` + token-on-resume) | 🟡 partial | `onSystemResumed` implemented in `WebRunnerHost`; token-on-resume TODO |
+| 5 — Capacitor target | ⏳ remaining | scaffold headless; device build/signing human-gated |
+
+**Runnable now:** `cd clients/web && npx vite build` → `traycer mobile-gateway serve --web-dir clients/web/dist` → `tailscale serve` → load PWA on phone → exercises `MobileHostGate` + bridge `/discover` host binding. Interactive sign-in additionally depends on `platform.traycer.ai` accepting the tailnet redirect URI (upstream allowlist; Capacitor's `traycer://` scheme sidesteps it).
+
 ## Step 1 — Bridge (`clients/traycer-cli/src/tailnet`)
 - **1a. `/discover` + ACAO** ✅ target
   - `clients/shared/host-client/tailnet-discovery.ts`: pure `probeRemoteHostWith`, `enumerateTailnetHostsWith` (relocated from desktop `remote-probe.ts`, reuse `DiscoveredRemoteHost`/`RemoteHostProbe` from `tailnet-remote.ts`). + tests.
@@ -14,8 +27,11 @@ Execution checklist for `2026-06-29-traycer-mobile-client-design.md`. TDD, green
 - `clients/web/` (or gui-app entry): Vite `index.html` + `main.tsx` mounting `<TraycerApp runnerHost={new WebRunnerHost(...)}/>`.
 - `WebRunnerHost implements IRunnerHost`: host-directory adapter (`probe` via HTTP `/whoami`, `enumerate` via `/discover`, reuse `remote-hosts-store`), auth via shared helpers w/ proxy base, `tokenStore`=IndexedDB, stubs for lifecycle/tray/file-drop/workspace/mic, real `onSystemResumed` via `visibilitychange`+`online`.
 
-## Step 3 — Mobile screens (inside gui-app, `useIsMobile` branch at epic route)
-- Inbox (notifications stream), Epic chat (virtuoso transcript + plain-text composer via `agent.sendMessage` + approval cards via `runtimeApprovalDecision` + permission-mode toggle), read-only Changes. No new-epic.
+## Step 3 — Responsive reuse (NOT custom screens — Path B retracted)
+Full gui-app reuse. Mobile UI work = responsive layout on the existing components:
+- **3a. Single-pane canvas on mobile**: on `useIsMobile`, the canvas renders only the active tile (no splits, hide resize handles); the existing tab strip is the switcher. Component test asserts no resize handles on mobile.
+- **3b. Responsive panels**: chat/diff/composer fit a ~390px viewport; verify against browser reload (and Playwright mobile-viewport screenshots of the pre-auth + reachable surfaces).
+- Home = existing `/epics` list. No Inbox, no new screens, no new-epic UX added.
 
 ## Step 4 — Lifecycle
 - `onSystemResumed` wired to reconnect + token-freshness check via CORS-safe path.
