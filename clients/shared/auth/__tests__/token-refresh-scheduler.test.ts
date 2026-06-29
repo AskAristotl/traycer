@@ -263,3 +263,51 @@ describe("createProactiveRefreshScheduler", () => {
     scheduler.stop();
   });
 });
+
+describe("ProactiveRefreshScheduler.checkNow (resume freshness)", () => {
+  function makeScheduler(tokenRef: { value: string | null }) {
+    const clock = makeFakeClock();
+    const revalidate = vi.fn(async () => {
+      tokenRef.value = tokenExpiringAtMs(clock.now() + 4 * HOUR_MS);
+    });
+    const scheduler = createProactiveRefreshScheduler<number>({
+      getToken: () => tokenRef.value,
+      revalidate,
+      now: clock.now,
+      setTimer: clock.setTimer,
+      clearTimer: clock.clearTimer,
+      leadMs: DEFAULT_REFRESH_LEAD_MS,
+      minDelayMs: DEFAULT_REFRESH_MIN_DELAY_MS,
+      onDiagnostic: null,
+    });
+    return { clock, revalidate, scheduler };
+  }
+
+  it("refreshes immediately when the token is already inside the lead window", async () => {
+    // exp 5 min out, lead is 10 min → already due the moment the app resumes.
+    const tokenRef = { value: tokenExpiringAtMs(5 * 60_000) };
+    const { revalidate, scheduler } = makeScheduler(tokenRef);
+    scheduler.start();
+    await scheduler.checkNow();
+    expect(revalidate).toHaveBeenCalledTimes(1);
+    scheduler.stop();
+  });
+
+  it("does not refresh a still-fresh token, but keeps the timer armed", async () => {
+    const tokenRef = { value: tokenExpiringAtMs(4 * HOUR_MS) };
+    const { clock, revalidate, scheduler } = makeScheduler(tokenRef);
+    scheduler.start();
+    await scheduler.checkNow();
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(clock.pendingCount()).toBe(1);
+    scheduler.stop();
+  });
+
+  it("is a no-op when stopped (signed out)", async () => {
+    const tokenRef = { value: tokenExpiringAtMs(5 * 60_000) };
+    const { revalidate, scheduler } = makeScheduler(tokenRef);
+    // never started → stopped
+    await scheduler.checkNow();
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+});

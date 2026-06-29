@@ -46,6 +46,14 @@ export interface ProactiveRefreshScheduler {
   start(): void;
   /** Cancel any pending refresh and stop re-arming. */
   stop(): void;
+  /**
+   * Check freshness immediately and refresh if the current token is already
+   * inside the lead window, then re-arm. The on-demand counterpart to the
+   * timer: mobile shells call this on app resume, where the background timer
+   * was suspended and a token could have crossed into (or past) the lead
+   * window while the app slept. No-op when stopped or signed out.
+   */
+  checkNow(): Promise<void>;
 }
 
 export interface ProactiveRefreshSchedulerOptions<THandle> {
@@ -105,8 +113,9 @@ export function createProactiveRefreshScheduler<THandle>(
     }, delay);
   };
 
-  const onFire = async (): Promise<void> => {
-    handle = null;
+  // Refresh now if the current token is inside the lead window; otherwise just
+  // (re-)arm off it. Shared by the scheduled fire and the on-demand `checkNow`.
+  const refreshIfDue = async (): Promise<void> => {
     if (stopped) {
       return;
     }
@@ -139,6 +148,11 @@ export function createProactiveRefreshScheduler<THandle>(
     arm();
   };
 
+  const onFire = async (): Promise<void> => {
+    handle = null;
+    await refreshIfDue();
+  };
+
   return {
     start(): void {
       stopped = false;
@@ -147,6 +161,12 @@ export function createProactiveRefreshScheduler<THandle>(
     stop(): void {
       stopped = true;
       clearScheduled();
+    },
+    checkNow(): Promise<void> {
+      // Cancel any pending fire so a resume-driven check can't race the timer,
+      // then evaluate immediately and re-arm off whatever the refresh settles on.
+      clearScheduled();
+      return refreshIfDue();
     },
   };
 }
