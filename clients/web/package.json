@@ -1,0 +1,37 @@
+{
+  "name": "@traycer-clients/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compile": "tsc --noEmit -p tsconfig.json",
+    "build": "vite build --config vite.config.ts",
+    "dev": "vite --config vite.config.ts",
+    "lint": "eslint . --cache --fix --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@traycer-clients/gui-app": "workspace:*",
+    "@traycer-clients/shared": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@rolldown/plugin-babel": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript-eslint/parser": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
+    "eslint": "catalog:",
+    "jsdom": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
