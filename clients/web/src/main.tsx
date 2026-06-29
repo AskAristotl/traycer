@@ -10,6 +10,7 @@ import { WebRunnerHost, createBrowserEnv } from "./web-runner-host";
 import { createWebSecureStorage, createWebTokenStore } from "./web-storage";
 import { createWebRemoteHostsBridge } from "./web-remote-hosts";
 import { loadWebConfig, composeWebSignInUrl } from "./web-config";
+import { parseDevAuthFragment } from "./web-dev-auth";
 import "./index.css";
 
 /**
@@ -18,12 +19,27 @@ import "./index.css";
  * tailnet remote-host fetcher. The same bundle is later wrapped by the
  * Capacitor shell, which swaps in `MobileRunnerHost`.
  */
-function bootstrap(): void {
+async function bootstrap(): Promise<void> {
   const origin = window.location.origin;
   const config = loadWebConfig(
     import.meta.env as Record<string, string | undefined>,
     origin,
   );
+
+  const tokenStore = createWebTokenStore(undefined);
+  // PWA-spike sign-in escape hatch: interactive OAuth can't return to a tailnet
+  // origin (upstream redirect-URI allowlist), so a desktop-obtained bearer can
+  // be injected once via a `#devauth=` fragment. Write it to the token store
+  // and scrub the fragment; `AuthService.start()` then rehydrates + validates.
+  const devAuth = parseDevAuthFragment(window.location.hash);
+  if (devAuth !== null) {
+    await tokenStore.set(devAuth);
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search,
+    );
+  }
 
   const notificationApi =
     typeof Notification !== "undefined"
@@ -42,7 +58,7 @@ function bootstrap(): void {
     authnBaseUrl: config.authnBaseUrl,
     signInBaseUrl: config.signInBaseUrl,
     secureStorage: createWebSecureStorage(undefined),
-    tokenStore: createWebTokenStore(undefined),
+    tokenStore,
     env: createBrowserEnv(),
     notificationApi,
   });
@@ -89,4 +105,4 @@ function bootstrap(): void {
   );
 }
 
-bootstrap();
+void bootstrap();
