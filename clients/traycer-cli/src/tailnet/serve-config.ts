@@ -23,6 +23,7 @@ export function buildServeArgs(input: {
   return [
     ["serve", "--bg", https, "--set-path=/whoami", `${bridge}/whoami`],
     ["serve", "--bg", https, "--set-path=/healthz", `${bridge}/healthz`],
+    ["serve", "--bg", https, "--set-path=/discover", `${bridge}/discover`],
     ["serve", "--bg", https, "--set-path=/rpc", `${bridge}/rpc`],
     ["serve", "--bg", https, "--set-path=/stream", `${bridge}/stream`],
   ];

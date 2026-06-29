@@ -51,6 +51,7 @@ import { serviceStatusCommand } from "./commands/service-status";
 import { serviceUninstallCommand } from "./commands/service-uninstall";
 import { whoamiCommand } from "./commands/whoami";
 import { runTailnetBridgeServe } from "./commands/tailnet-bridge-serve";
+import { runMobileGatewayServe } from "./commands/mobile-gateway-serve";
 import {
   buildBridgeServiceInstallCommand,
   bridgeServiceUninstallCommand,
@@ -278,6 +279,7 @@ function registerCommands(program: Command): void {
   registerAgentCommands(program);
   registerMonitorCommand(program);
   registerTailnetBridgeCommands(program);
+  registerMobileGatewayCommands(program);
 }
 
 function registerAuthCommands(program: Command): void {
@@ -1312,6 +1314,45 @@ function registerTailnetBridgeCommands(program: Command): void {
   );
   withRunner(bridge.command("uninstall").description("Remove the tailnet bridge service"), () => bridgeServiceUninstallCommand);
   withRunner(bridge.command("status").description("Show tailnet bridge service status"), () => bridgeServiceStatusCommand);
+}
+
+function registerMobileGatewayCommands(program: Command): void {
+  const gateway = program
+    .command("mobile-gateway")
+    .description(
+      "Serve the Traycer PWA over the tailnet and reverse-proxy auth (spike)",
+    );
+
+  gateway
+    .command("serve")
+    .description("Run the mobile gateway in the foreground")
+    .requiredOption("--web-dir <path>", "Directory of built web assets (clients/web/dist)")
+    .option("--https-port <port>", "Tailnet HTTPS port for tailscale serve", "443")
+    .option("--port <port>", "Loopback port for the gateway (0 = auto)", "0")
+    .option("--authn-origin <url>", "Upstream auth origin", "https://authn.traycer.ai")
+    .action(async (opts: Record<string, unknown>) => {
+      try {
+        await runMobileGatewayServe({
+          webDir: String(opts.webDir),
+          httpsPort:
+            typeof opts.httpsPort === "string"
+              ? Number.parseInt(opts.httpsPort, 10)
+              : 443,
+          port:
+            typeof opts.port === "string" ? Number.parseInt(opts.port, 10) : 0,
+          authnOrigin:
+            typeof opts.authnOrigin === "string"
+              ? opts.authnOrigin
+              : "https://authn.traycer.ai",
+        });
+        process.exit(0);
+      } catch (err) {
+        process.stderr.write(
+          `[traycer mobile-gateway] fatal: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+        process.exit(1);
+      }
+    });
 }
 
 // Script entry. Skipped when this module is imported (e.g. by the

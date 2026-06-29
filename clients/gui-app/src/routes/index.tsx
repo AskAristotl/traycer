@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { RootLandingPage } from "@/components/layout/root-landing-page";
+import { isMobileViewport } from "@/hooks/ui/use-mobile";
 import { useEpicCanvasStore } from "@/stores/epics/canvas/store";
 import { useLandingDraftStore } from "@/stores/home/landing-draft-store";
 import { useTabsStore } from "@/stores/tabs/store";
@@ -8,6 +9,9 @@ export const Route = createFileRoute("/")({
   // Sends a signed-in user with no restored tabs to a fresh draft.
   beforeLoad: ({ context }) => {
     if (context.getAuthSnapshot().status !== "signed-in") return;
+    // On a phone the inbox is the home surface, so `/` stays put and renders
+    // it (see `RootLandingPage`) instead of bouncing to the draft composer.
+    if (isMobileViewport()) return;
     if (hasRestoredTabs()) return;
     redirect({ to: "/draft/new", replace: true, throw: true });
   },

@@ -1,0 +1,9 @@
+/*
+ * Mobile (Capacitor) Tailwind entrypoint. Reuses the canonical gui-app
+ * stylesheet so the native build ships identical theme tokens and primitives.
+ */
+
+@import "../../gui-app/src/index.css";
+
+@source "../../gui-app/src";
+@source ".";

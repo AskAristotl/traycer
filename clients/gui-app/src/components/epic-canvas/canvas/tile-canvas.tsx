@@ -13,6 +13,7 @@ import {
   type EpicCanvasDropTargetData,
 } from "@/components/epic-canvas/dnd/dnd";
 import { useEpicHasArtifactRecords } from "@/lib/epic-selectors";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
 import { useSnapshotLoading } from "@/components/epic-canvas/snapshots/snapshot-loading-context-value";
 import { SnapshotErrorBanner } from "@/components/epic-canvas/snapshots/snapshot-error-banner";
 import type { SnapshotFetchError } from "@/stores/epics/open-epic/store";
@@ -119,6 +120,7 @@ function TileCanvasLive(
   );
   const resizeSplitInTab = useEpicCanvasStore((s) => s.resizeSplitInTab);
   const hasRecords = useEpicHasArtifactRecords();
+  const isMobile = useIsMobile();
 
   const onResizeGroup = useCallback(
     (groupId: string, sizes: ReadonlyArray<number>) => {
@@ -147,6 +149,7 @@ function TileCanvasLive(
         sizesByGroupId={sizesByGroupId}
         PaneComponent={TileCanvasPane}
         onResizeGroup={onResizeGroup}
+        isMobile={isMobile}
       />
     </TileCanvasPaneContext.Provider>
   );

@@ -24,3 +24,11 @@ export function useIsMobile(): boolean {
     readIsMobileServerSnapshot,
   );
 }
+
+/**
+ * Non-hook viewport check for router `beforeLoad` (which runs outside React).
+ * Guards `window` so a non-DOM context resolves to `false`.
+ */
+export function isMobileViewport(): boolean {
+  return typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT;
+}

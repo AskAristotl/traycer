@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from "./routes/__root";
 import { Route as SettingsRouteImport } from "./routes/settings";
 import { Route as OnboardingRouteImport } from "./routes/onboarding";
+import { Route as InboxRouteImport } from "./routes/inbox";
 import { Route as EpicsRouteImport } from "./routes/epics";
 import { Route as IndexRouteImport } from "./routes/index";
 import { Route as SettingsIndexRouteImport } from "./routes/settings.index";
@@ -37,6 +38,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const OnboardingRoute = OnboardingRouteImport.update({
   id: "/onboarding",
   path: "/onboarding",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const InboxRoute = InboxRouteImport.update({
+  id: "/inbox",
+  path: "/inbox",
   getParentRoute: () => rootRouteImport,
 } as any);
 const EpicsRoute = EpicsRouteImport.update({
@@ -128,6 +134,7 @@ const EpicsEpicIdTabIdRoute = EpicsEpicIdTabIdRouteImport.update({
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
   "/epics": typeof EpicsRouteWithChildren;
+  "/inbox": typeof InboxRoute;
   "/onboarding": typeof OnboardingRoute;
   "/settings": typeof SettingsRouteWithChildren;
   "/draft/$draftId": typeof DraftDraftIdRoute;
@@ -148,6 +155,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute;
+  "/inbox": typeof InboxRoute;
   "/onboarding": typeof OnboardingRoute;
   "/draft/$draftId": typeof DraftDraftIdRoute;
   "/draft/new": typeof DraftNewRoute;
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/": typeof IndexRoute;
   "/epics": typeof EpicsRouteWithChildren;
+  "/inbox": typeof InboxRoute;
   "/onboarding": typeof OnboardingRoute;
   "/settings": typeof SettingsRouteWithChildren;
   "/draft/$draftId": typeof DraftDraftIdRoute;
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
   fullPaths:
     | "/"
     | "/epics"
+    | "/inbox"
     | "/onboarding"
     | "/settings"
     | "/draft/$draftId"
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
+    | "/inbox"
     | "/onboarding"
     | "/draft/$draftId"
     | "/draft/new"
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | "__root__"
     | "/"
     | "/epics"
+    | "/inbox"
     | "/onboarding"
     | "/settings"
     | "/draft/$draftId"
@@ -254,6 +266,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute;
   EpicsRoute: typeof EpicsRouteWithChildren;
+  InboxRoute: typeof InboxRoute;
   OnboardingRoute: typeof OnboardingRoute;
   SettingsRoute: typeof SettingsRouteWithChildren;
   DraftDraftIdRoute: typeof DraftDraftIdRoute;
@@ -274,6 +287,13 @@ declare module "@tanstack/react-router" {
       path: "/onboarding";
       fullPath: "/onboarding";
       preLoaderRoute: typeof OnboardingRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/inbox": {
+      id: "/inbox";
+      path: "/inbox";
+      fullPath: "/inbox";
+      preLoaderRoute: typeof InboxRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/epics": {
@@ -445,6 +465,7 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EpicsRoute: EpicsRouteWithChildren,
+  InboxRoute: InboxRoute,
   OnboardingRoute: OnboardingRoute,
   SettingsRoute: SettingsRouteWithChildren,
   DraftDraftIdRoute: DraftDraftIdRoute,

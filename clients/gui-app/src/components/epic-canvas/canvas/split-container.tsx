@@ -23,7 +23,7 @@ import type {
   TileLayoutNode,
   TilePane,
 } from "@/stores/epics/canvas/tile-tree";
-import { sizesForGroup } from "@/stores/epics/canvas/tile-tree";
+import { sizesForGroup, collectPanes } from "@/stores/epics/canvas/tile-tree";
 import { MIN_PANE_PX } from "@/stores/epics/canvas/tile-tree-constants";
 import { SplitResizeHandle } from "./resize-handle";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,15 @@ export interface SplitContainerProps {
     groupId: string,
     sizes: ReadonlyArray<number>,
   ) => void;
+  /**
+   * On mobile the recursive split tree collapses to a single vertical stack of
+   * its leaf panes - side-by-side splits don't fit a phone and the drag
+   * resize handles are useless on touch. The common case (a fresh epic, one
+   * pane) renders identically to desktop; only desktop-created multi-pane
+   * splits change, becoming a scrollable column where each pane keeps its own
+   * tab strip.
+   */
+  readonly isMobile: boolean;
 }
 
 export interface SplitPaneComponentProps {
@@ -44,6 +53,33 @@ export interface SplitPaneComponentProps {
 
 export function SplitContainer(props: SplitContainerProps) {
   if (props.root === null) return null;
+
+  if (props.isMobile) {
+    const panes = collectPanes(props.root);
+    if (panes.length <= 1) {
+      // Single pane: render it directly, full height - identical to desktop.
+      return panes.length === 1 ? (
+        <props.PaneComponent pane={panes[0]} />
+      ) : null;
+    }
+    return (
+      <div
+        data-testid="tile-mobile-stack"
+        className="flex h-full w-full flex-col overflow-y-auto overscroll-contain"
+      >
+        {panes.map((pane) => (
+          <div
+            key={pane.id}
+            data-split-child
+            className="relative w-full min-h-[100dvh] shrink-0"
+          >
+            <props.PaneComponent pane={pane} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <SplitNodeView
       node={props.root}

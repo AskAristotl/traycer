@@ -203,6 +203,7 @@ export class AuthService {
   private currentProfile: AuthProfile | null = null;
   private lastError: string | null = null;
   private callbackDisposable: Disposable | null = null;
+  private systemResumedDisposable: Disposable | null = null;
   private pendingTimeoutHandle: number | null = null;
   private currentRevalidation: Promise<ValidationOutcome | null> | null = null;
   // Single-flight guard for the proactive force-refresh path so the refresh
@@ -268,6 +269,15 @@ export class AuthService {
       leadMs: DEFAULT_REFRESH_LEAD_MS,
       minDelayMs: DEFAULT_REFRESH_MIN_DELAY_MS,
       onDiagnostic: null,
+    });
+    // On app resume the proactive-refresh timer was suspended in the
+    // background, so a token can cross into (or past) the lead window unseen.
+    // Re-check freshness immediately - the web/mobile shells fire this on
+    // `visibilitychange` / Capacitor `App` resume - so a long-backgrounded
+    // session refreshes before its next live cloud call instead of 401-ing.
+    // No-op while signed out (the scheduler is stopped).
+    this.systemResumedDisposable = this.runnerHost.onSystemResumed(() => {
+      void this.refreshScheduler.checkNow();
     });
     const initialAuth = useAuthStore.getState();
     this.lastEmittedStatus = initialAuth.status;
@@ -1259,6 +1269,10 @@ export class AuthService {
     if (this.callbackDisposable !== null) {
       this.callbackDisposable.dispose();
       this.callbackDisposable = null;
+    }
+    if (this.systemResumedDisposable !== null) {
+      this.systemResumedDisposable.dispose();
+      this.systemResumedDisposable = null;
     }
     this.authStoreUnsubscribe();
     this.contextProvider.dispose();
