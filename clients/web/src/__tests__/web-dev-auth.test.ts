@@ -10,12 +10,19 @@ describe("parseDevAuthFragment", () => {
   });
 
   it("decodes percent-encoded values", () => {
-    const token = "ey.J|with-pipe";
-    const refresh = "r/with slash";
+    const token = "ey.Jheader.sig";
+    const refresh = "r/with slash+plus";
     const hash = `#devauth=${encodeURIComponent(token)}|${encodeURIComponent(refresh)}`;
     expect(parseDevAuthFragment(hash)).toEqual({
       token,
       refreshToken: refresh,
+    });
+  });
+
+  it("handles a percent-encoded `|` separator (iOS Safari)", () => {
+    expect(parseDevAuthFragment("#devauth=abc%7Cdef")).toEqual({
+      token: "abc",
+      refreshToken: "def",
     });
   });
 

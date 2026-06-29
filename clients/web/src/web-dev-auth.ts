@@ -23,15 +23,21 @@ export function parseDevAuthFragment(hash: string): StoredAuthTokens | null {
     return null;
   }
   const body = hash.slice(DEV_AUTH_PREFIX.length);
-  const sep = body.indexOf("|");
-  if (sep === -1) {
+  // The separator is a literal `|`, but some browsers (notably iOS Safari)
+  // percent-encode it to `%7C` in `location.hash`. The two parts are
+  // `encodeURIComponent` output, so neither contains a literal `|` of its own;
+  // split on whichever separator form appears first, then decode each side.
+  const match = /\||%7C/i.exec(body);
+  if (match === null) {
     return null;
   }
+  const sepStart = match.index;
+  const sepEnd = sepStart + match[0].length;
   let token: string;
   let refreshToken: string;
   try {
-    token = decodeURIComponent(body.slice(0, sep));
-    refreshToken = decodeURIComponent(body.slice(sep + 1));
+    token = decodeURIComponent(body.slice(0, sepStart));
+    refreshToken = decodeURIComponent(body.slice(sepEnd));
   } catch {
     return null;
   }
