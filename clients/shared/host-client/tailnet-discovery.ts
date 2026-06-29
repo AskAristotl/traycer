@@ -62,31 +62,46 @@ export async function enumerateTailnetHostsWith(deps: {
   if (parsed === null || typeof parsed !== "object") {
     return [];
   }
+  const status = parsed as Record<string, unknown>;
 
-  const peer = (parsed as Record<string, unknown>).Peer;
-  if (peer === null || typeof peer !== "object") {
-    return [];
+  const candidates: string[] = [];
+
+  // Include `Self` (the local node). `tailscale status` lists peers in `Peer`
+  // and the local node separately in `Self`, so a peer-only scan would miss the
+  // host running on the SAME machine as this bridge/gateway - the common case
+  // (the gateway on Plato discovering Plato's own host). It is still
+  // probe-gated below, so a machine with no bridge of its own drops out.
+  const self = status.Self;
+  if (self !== null && typeof self === "object") {
+    const dnsName = (self as Record<string, unknown>).DNSName;
+    if (typeof dnsName === "string" && dnsName !== "") {
+      candidates.push(normalizeTailnetName(dnsName));
+    }
   }
 
-  const onlineNames: string[] = Object.values(
-    peer as Record<string, unknown>,
-  ).flatMap((p) => {
-    if (p === null || typeof p !== "object") {
-      return [];
+  const peer = status.Peer;
+  if (peer !== null && typeof peer === "object") {
+    for (const p of Object.values(peer as Record<string, unknown>)) {
+      if (p === null || typeof p !== "object") {
+        continue;
+      }
+      const entry = p as Record<string, unknown>;
+      if (entry.Online !== true) {
+        continue;
+      }
+      const dnsName = entry.DNSName;
+      if (typeof dnsName !== "string" || dnsName === "") {
+        continue;
+      }
+      candidates.push(normalizeTailnetName(dnsName));
     }
-    const entry = p as Record<string, unknown>;
-    if (entry.Online !== true) {
-      return [];
-    }
-    const dnsName = entry.DNSName;
-    if (typeof dnsName !== "string" || dnsName === "") {
-      return [];
-    }
-    return [normalizeTailnetName(dnsName)];
-  });
+  }
+
+  // Dedupe (a name can't appear twice, but guard anyway).
+  const uniqueNames = [...new Set(candidates)];
 
   const probeResults = await Promise.all(
-    onlineNames.map(async (tailnetName) => ({
+    uniqueNames.map(async (tailnetName) => ({
       tailnetName,
       probe: await deps.probe(tailnetName),
     })),

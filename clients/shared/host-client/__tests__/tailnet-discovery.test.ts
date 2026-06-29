@@ -83,4 +83,49 @@ describe("enumerateTailnetHostsWith", () => {
 
     expect(probed).toEqual(["myhost.ts.net"]);
   });
+
+  it("includes the local Self node when its bridge is reachable", async () => {
+    const fakeStatus = JSON.stringify({
+      Self: { Online: true, DNSName: "plato.ts.net." },
+      Peer: { "node-a": { Online: true, DNSName: "laptop.ts.net." } },
+    });
+    const result = await enumerateTailnetHostsWith({
+      tailscaleStatusJson: async () => fakeStatus,
+      probe: async (tailnetName) =>
+        tailnetName === "plato.ts.net"
+          ? { reachable: true, hostId: "self", version: "1.0.0" }
+          : { reachable: false, hostId: null, version: null },
+    });
+    // Self (plato) has a bridge; the peer doesn't.
+    expect(result).toEqual([
+      { tailnetName: "plato.ts.net", hostId: "self", version: "1.0.0" },
+    ]);
+  });
+
+  it("drops Self when it has no reachable bridge", async () => {
+    const fakeStatus = JSON.stringify({
+      Self: { Online: true, DNSName: "gateway-only.ts.net." },
+    });
+    const result = await enumerateTailnetHostsWith({
+      tailscaleStatusJson: async () => fakeStatus,
+      probe: async () => ({ reachable: false, hostId: null, version: null }),
+    });
+    expect(result).toEqual([]);
+  });
+
+  it("does not probe the same name twice when Self also appears as a peer", async () => {
+    const fakeStatus = JSON.stringify({
+      Self: { Online: true, DNSName: "plato.ts.net." },
+      Peer: { "node-a": { Online: true, DNSName: "plato.ts.net." } },
+    });
+    const probed: string[] = [];
+    await enumerateTailnetHostsWith({
+      tailscaleStatusJson: async () => fakeStatus,
+      probe: async (tailnetName) => {
+        probed.push(tailnetName);
+        return { reachable: false, hostId: null, version: null };
+      },
+    });
+    expect(probed).toEqual(["plato.ts.net"]);
+  });
 });
