@@ -7,6 +7,7 @@ import {
   useRemoteHostsStore,
 } from "@traycer-clients/gui-app";
 import { createWebRemoteHostsBridge } from "@traycer-clients/web";
+import { TAILNET_BRIDGE_HTTPS_PORT } from "@traycer-clients/shared/host-client/tailnet-remote";
 import { createMobileRunnerHost } from "./mobile-runner-host";
 import "./index.css";
 
@@ -24,12 +25,21 @@ const BOOTSTRAP_HOSTS = (
   .map((s) => s.trim())
   .filter((s) => s.length > 0);
 
+// No gateway on native: discover via the first bootstrap bridge's
+// `:8443/discover` directly (native HTTP bypasses CORS). Empty when no
+// bootstrap host is configured — discovery then yields nothing and the user
+// adds hosts manually.
+const DISCOVER_URL =
+  BOOTSTRAP_HOSTS.length > 0
+    ? `https://${BOOTSTRAP_HOSTS[0]}:${TAILNET_BRIDGE_HTTPS_PORT}/discover`
+    : "";
+
 function bootstrap(): void {
   const host = createMobileRunnerHost();
 
   const remoteBridge = createWebRemoteHostsBridge({
     fetchFn: (input) => fetch(input),
-    bootstrapHosts: BOOTSTRAP_HOSTS,
+    discoverUrl: DISCOVER_URL,
   });
   (globalThis as { runnerHost?: unknown }).runnerHost = {
     remoteHosts: remoteBridge,

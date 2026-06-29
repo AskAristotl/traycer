@@ -65,7 +65,9 @@ async function bootstrap(): Promise<void> {
 
   const remoteBridge = createWebRemoteHostsBridge({
     fetchFn: (input) => fetch(input),
-    bootstrapHosts: config.bootstrapHosts,
+    // The gateway serves `/discover` same-origin (it runs on a tailnet node
+    // with the `tailscale` CLI), so no bootstrap hosts are needed.
+    discoverUrl: `${origin}/discover`,
   });
 
   // The remote-hosts settings panel feature-detects `window.runnerHost

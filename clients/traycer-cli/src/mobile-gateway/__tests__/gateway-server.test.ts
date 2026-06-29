@@ -16,6 +16,7 @@ async function withGateway(
     webDir,
     port: 0,
     authnOrigin: "https://authn.traycer.ai",
+    discover: async () => [],
   });
   try {
     await fn(`http://127.0.0.1:${gateway.port}`);
@@ -23,6 +24,34 @@ async function withGateway(
     await gateway.close();
   }
 }
+
+describe("mobile gateway /discover", () => {
+  it("serves the injected tailnet enumerator same-origin", async () => {
+    const webDir = await mkdtemp(join(tmpdir(), "traycer-gw-disc-"));
+    const hosts = [
+      { tailnetName: "studio.ts.net", hostId: "h1", version: "1.0.0" },
+    ];
+    try {
+      await writeFile(join(webDir, "index.html"), "<!doctype html>");
+      const gateway = await startMobileGateway({
+        webDir,
+        port: 0,
+        authnOrigin: "https://authn.traycer.ai",
+        discover: async () => hosts,
+      });
+      try {
+        const res = await fetch(`http://127.0.0.1:${gateway.port}/discover`);
+        expect(res.status).toBe(200);
+        expect(res.headers.get("access-control-allow-origin")).toBe("*");
+        expect(await res.json()).toEqual({ hosts });
+      } finally {
+        await gateway.close();
+      }
+    } finally {
+      await rm(webDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("mobile gateway static serving", () => {
   it("serves a built asset and the SPA shell, with index.html fallback for client routes", async () => {

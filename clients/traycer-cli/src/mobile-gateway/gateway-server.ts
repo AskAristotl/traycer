@@ -2,12 +2,17 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { request as httpsRequest } from "node:https";
 import { readFile } from "node:fs/promises";
 import { join, normalize, sep } from "node:path";
+import type { DiscoveredRemoteHost } from "@traycer-clients/shared/host-client/tailnet-remote";
 import { routeGatewayRequest, isUnsafeStaticPath } from "./gateway-router";
+import { enumerateTailnetHosts } from "../tailnet/discover";
 
 export interface MobileGateway {
   readonly port: number;
   close(): Promise<void>;
 }
+
+/** Enumerates the Traycer hosts reachable on this machine's tailnet. */
+export type TailnetDiscoverer = () => Promise<readonly DiscoveredRemoteHost[]>;
 
 export interface StartMobileGatewayOptions {
   /** Absolute path to the built web assets (`clients/web/dist`). */
@@ -16,6 +21,29 @@ export interface StartMobileGatewayOptions {
   readonly port: number;
   /** Upstream auth origin, e.g. `https://authn.traycer.ai`. */
   readonly authnOrigin: string;
+  /**
+   * Tailnet host enumerator backing same-origin `GET /discover`. Defaults to
+   * the real `tailscale status --json` + `/whoami` probe; tests inject a fake.
+   */
+  readonly discover?: TailnetDiscoverer;
+}
+
+async function serveDiscover(
+  discover: TailnetDiscoverer,
+  res: ServerResponse,
+): Promise<void> {
+  let hosts: readonly DiscoveredRemoteHost[] = [];
+  try {
+    hosts = await discover();
+  } catch {
+    hosts = [];
+  }
+  const body = JSON.stringify({ hosts });
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+  });
+  res.end(body);
 }
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
@@ -185,10 +213,16 @@ function proxyAuthn(
 export function startMobileGateway(
   options: StartMobileGatewayOptions,
 ): Promise<MobileGateway> {
+  const discover = options.discover ?? enumerateTailnetHosts;
+
   const server = createServer((req, res) => {
     const route = routeGatewayRequest(req.url ?? "/");
     if (route.kind === "static") {
       void serveStatic(options.webDir, route.relativePath, res);
+      return;
+    }
+    if (route.kind === "discover") {
+      void serveDiscover(discover, res);
       return;
     }
     // Buffer the request body (auth POSTs carry a small JSON payload) before

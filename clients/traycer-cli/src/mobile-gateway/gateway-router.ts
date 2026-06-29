@@ -17,6 +17,7 @@ const AUTHN_PREFIX = "/authn/";
 
 export type GatewayRoute =
   | { readonly kind: "authn"; readonly upstreamPath: string }
+  | { readonly kind: "discover" }
   | { readonly kind: "static"; readonly relativePath: string };
 
 /** Strip the query/hash and percent-decode a request path. */
@@ -50,6 +51,13 @@ export function routeGatewayRequest(path: string): GatewayRoute {
     const upstreamPath =
       normalized === "/authn" ? "/" : normalized.slice("/authn".length);
     return { kind: "authn", upstreamPath };
+  }
+
+  // Same-origin tailnet discovery: the gateway runs on a node with the
+  // `tailscale` CLI, so the PWA fetches `/discover` here instead of each host's
+  // bridge — no per-host `/discover` and no CORS.
+  if (normalized === "/discover") {
+    return { kind: "discover" };
   }
 
   // Map "/" to the SPA shell; otherwise strip the leading slash to a relative

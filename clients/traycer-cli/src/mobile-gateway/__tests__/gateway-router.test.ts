@@ -33,6 +33,10 @@ describe("routeGatewayRequest", () => {
     });
   });
 
+  it("routes /discover to the same-origin discover handler", () => {
+    expect(routeGatewayRequest("/discover")).toEqual({ kind: "discover" });
+  });
+
   it("maps a static asset path to a relative path", () => {
     expect(routeGatewayRequest("/assets/index-abc.js")).toEqual({
       kind: "static",

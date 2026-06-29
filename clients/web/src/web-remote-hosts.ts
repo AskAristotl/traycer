@@ -71,8 +71,13 @@ function asDiscoveredHosts(value: unknown): readonly DiscoveredRemoteHost[] {
 
 export interface WebRemoteHostsDeps {
   readonly fetchFn: FetchFn;
-  /** Tailnet names of bridges to bootstrap discovery from. */
-  readonly bootstrapHosts: readonly string[];
+  /**
+   * Endpoint that enumerates the tailnet's hosts as `{ hosts }`. On the PWA
+   * spike this is the gateway's same-origin `/discover` (the gateway runs on a
+   * node with the `tailscale` CLI); Capacitor points it at a bridge's
+   * `:8443/discover` over native HTTP.
+   */
+  readonly discoverUrl: string;
 }
 
 export interface WebRemoteHostsBridge {
@@ -91,35 +96,19 @@ export function createWebRemoteHostsBridge(
     return asTailnetWhoami(await res.json());
   };
 
-  const discoverFrom = async (
-    tailnetName: string,
-  ): Promise<readonly DiscoveredRemoteHost[]> => {
-    try {
-      const res = await deps.fetchFn(`${bridgeBase(tailnetName)}/discover`);
-      if (!res.ok) {
-        return [];
-      }
-      return asDiscoveredHosts(await res.json());
-    } catch {
-      return [];
-    }
-  };
-
   return {
     probe: (input) => probeRemoteHostWith(input, { getWhoami }),
     enumerate: async (): Promise<readonly DiscoveredRemoteHost[]> => {
-      const lists = await Promise.all(deps.bootstrapHosts.map(discoverFrom));
-      // Dedupe by hostId across bootstraps; first occurrence wins.
-      const seen = new Set<string>();
-      const merged: DiscoveredRemoteHost[] = [];
-      for (const host of lists.flat()) {
-        if (seen.has(host.hostId)) {
-          continue;
+      // One fetch: the discover endpoint enumerates the whole tailnet.
+      try {
+        const res = await deps.fetchFn(deps.discoverUrl);
+        if (!res.ok) {
+          return [];
         }
-        seen.add(host.hostId);
-        merged.push(host);
+        return asDiscoveredHosts(await res.json());
+      } catch {
+        return [];
       }
-      return merged;
     },
   };
 }
